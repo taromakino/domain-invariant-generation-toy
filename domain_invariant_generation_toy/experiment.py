@@ -1,9 +1,16 @@
 import numpy as np
 from argparse import ArgumentParser
 from causallearn.search.ConstraintBased.PC import pc
-from cdt.causality.pairwise import ANM
+from cdt.causality.pairwise import ANM, IGCI, RECI
 from data import make_raw_data
 from utils.stats import jaccard_similarity
+
+
+PAIRWISE_TESTS = {
+    'ANM': ANM,
+    'IGCI': IGCI,
+    'RECI': RECI
+}
 
 
 def get_neighbor_names(cg, var_name, var_names, node_names):
@@ -13,9 +20,8 @@ def get_neighbor_names(cg, var_name, var_names, node_names):
     return [node_to_var_name[neighbor.name] for neighbor in neighbors]
 
 
-
 def main(args):
-    pairwise_test = ANM()
+    pairwise_test = PAIRWISE_TESTS[args.pairwise_test_name]()
     # z_c - y
     ne_ground_truth = set([f'z_c_{i}' for i in range(args.size)] + [f'z_s_{i}' for i in range(args.size // 2)])
     pa_ground_truth = set([f'z_c_{i}' for i in range(args.size)])
@@ -52,6 +58,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    parser.add_argument('--pairwise_test_name', type=str, default='ANM')
     parser.add_argument('--n_seeds', type=int, default=5)
     parser.add_argument('--n_envs', type=int, default=5)
     parser.add_argument('--n_examples_per_env', type=int, default=1000)
