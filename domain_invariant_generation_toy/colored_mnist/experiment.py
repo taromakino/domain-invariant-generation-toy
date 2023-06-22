@@ -3,8 +3,8 @@ import pytorch_lightning as pl
 from argparse import ArgumentParser
 from data import make_data
 from model import Model
-from utils.file import save_file
-from utils.nn_utils import make_trainer
+from ..utils.file import save_file
+from ..utils.nn_utils import make_trainer
 
 
 def main(args):

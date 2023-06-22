@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 
@@ -38,10 +39,6 @@ def arr_to_cov_mat(arr):
     '''
     tril = arr_to_scale_tril(arr)
     return np.matmul(tril, np.transpose(tril, axes=(0, 2, 1)))
-
-
-def jaccard_similarity(lhs, rhs):
-    return len(lhs.intersection(rhs)) / len(lhs.union(rhs))
 
 
 def make_raw_data(seed, n_envs, n_examples_per_env, size):

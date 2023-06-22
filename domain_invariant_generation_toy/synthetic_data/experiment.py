@@ -3,7 +3,6 @@ from argparse import ArgumentParser
 from causallearn.search.ConstraintBased.PC import pc
 from cdt.causality.pairwise import ANM, IGCI, RECI
 from data import make_raw_data
-from utils.stats import jaccard_similarity
 
 
 PAIRWISE_TESTS = {
@@ -11,6 +10,10 @@ PAIRWISE_TESTS = {
     'IGCI': IGCI,
     'RECI': RECI
 }
+
+
+def jaccard_similarity(lhs, rhs):
+    return len(lhs.intersection(rhs)) / len(lhs.union(rhs))
 
 
 def get_neighbor_names(cg, var_name, var_names, node_names):

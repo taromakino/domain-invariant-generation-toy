@@ -4,8 +4,8 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from utils.nn_utils import MLP
-from utils.stats import arr_to_scale_tril, size_to_n_tril
+from ..utils.nn_utils import MLP
+from ..utils.stats import arr_to_scale_tril, size_to_n_tril
 
 
 class GaussianMLP(nn.Module):
