@@ -8,16 +8,6 @@ from utils.nn_utils import MLP
 from utils.stats import arr_to_scale_tril, size_to_n_tril
 
 
-class GaussianMLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim, activation_class):
-        super().__init__()
-        self.mu_net = MLP(input_dim, hidden_dims, output_dim, activation_class)
-        self.logvar_net = MLP(input_dim, hidden_dims, output_dim, activation_class)
-
-    def forward(self, *args):
-        return self.mu_net(*args), F.softplus(self.logvar_net(*args))
-
-
 class Model(pl.LightningModule):
     def __init__(self, x_size, y_size, e_size, z_size, h_sizes, beta, lr):
         super().__init__()
@@ -25,29 +15,31 @@ class Model(pl.LightningModule):
         self.beta = beta
         self.lr = lr
         u_size = e_size + y_size
-        self.q_z_ux = GaussianMLP(u_size + x_size, h_sizes, z_size, nn.ReLU)
+        self.q_z_ux_mu = MLP(u_size + x_size, h_sizes, z_size, nn.ReLU)
+        self.q_z_ux_cov = MLP(u_size + x_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
         self.p_x_uz = MLP(u_size + z_size, h_sizes, x_size, nn.ReLU)
         self.p_z_u_mu = MLP(u_size, h_sizes, z_size, nn.ReLU)
         self.p_z_u_cov = MLP(u_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
         self.p_y_x = MLP(x_size, h_sizes, y_size, nn.ReLU)
 
 
-    def sample_z(self, mu, var):
-        sd = var.sqrt()
-        epsilon = torch.randn_like(sd)
-        return mu + sd * epsilon
+    def sample_z(self, mu, cov):
+        batch_size, z_size = mu.shape
+        epsilon = torch.randn(batch_size, z_size, 1)
+        return mu + torch.bmm(cov, epsilon).squeeze()
 
 
     def forward(self, x, y, e):
         u = torch.cat((e, y), dim=1)
         # z ~ q(z|u,x)
-        mu_z_ux, var_z_ux = self.q_z_ux(u, x)
-        z = self.sample_z(mu_z_ux, var_z_ux)
+        mu_z_ux = self.q_z_ux_mu(u, x)
+        cov_z_ux = arr_to_scale_tril(self.q_z_ux_cov(u, x))
+        z = self.sample_z(mu_z_ux, cov_z_ux)
         # E_q(z|u,x)[log p(x|u,z)]
         x_pred = self.p_x_uz(u, z)
         log_prob_x_uz = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # KL(q(z|u,x) || p(z|u))
-        dist_z_ux = D.MultivariateNormal(mu_z_ux, torch.diag_embed(var_z_ux))
+        dist_z_ux = D.MultivariateNormal(mu_z_ux, scale_tril=cov_z_ux)
         mu_z_u = self.p_z_u_mu(u)
         cov_z_u = arr_to_scale_tril(self.p_z_u_cov(u))
         dist_z_u = D.MultivariateNormal(mu_z_u, scale_tril=cov_z_u)
