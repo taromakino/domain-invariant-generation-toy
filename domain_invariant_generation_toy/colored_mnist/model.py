@@ -25,7 +25,7 @@ class Model(pl.LightningModule):
 
     def sample_z(self, mu, cov):
         batch_size, z_size = mu.shape
-        epsilon = torch.randn(batch_size, z_size, 1)
+        epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(cov, epsilon).squeeze()
 
 
