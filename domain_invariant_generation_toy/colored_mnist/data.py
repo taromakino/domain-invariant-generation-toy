@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -36,7 +37,8 @@ def make_environment(images, labels, e_prob, e_arr):
     }
 
 
-def make_data(batch_size, n_workers):
+def make_data(train_ratio, batch_size, n_workers):
+    rng = np.random.RandomState(0)
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     mnist_train = (mnist.data[:50000], mnist.targets[:50000])
     mnist_val = (mnist.data[50000:], mnist.targets[50000:])
@@ -45,8 +47,15 @@ def make_data(batch_size, n_workers):
         make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1, [0, 1, 0]),
         make_environment(mnist_val[0], mnist_val[1], 0.9, [0, 0, 1])
     ]
-    x_train = torch.cat((envs[0]['x'], envs[1]['x']))
-    y_train = torch.cat((envs[0]['y'], envs[1]['y']))
-    e_train = torch.cat((envs[0]['e'], envs[1]['e']))
+    x_trainval = torch.cat((envs[0]['x'], envs[1]['x']))
+    y_trainval = torch.cat((envs[0]['y'], envs[1]['y']))
+    e_trainval = torch.cat((envs[0]['e'], envs[1]['e']))
+    n_trainval = len(x_trainval)
+    n_train = int(train_ratio * n_trainval)
+    train_idxs = rng.choice(n_trainval, n_train, replace=False)
+    val_idxs = np.setdiff1d(np.arange(n_trainval), train_idxs)
+    x_train, y_train, e_train = x_trainval[train_idxs], y_trainval[train_idxs], e_trainval[train_idxs]
+    x_val, y_val, e_val = x_trainval[val_idxs], y_trainval[val_idxs], e_trainval[val_idxs]
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
-    return data_train
+    data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
+    return data_train, data_val

@@ -65,5 +65,11 @@ class Model(pl.LightningModule):
         return loss
 
 
+    def validation_step(self, batch, batch_idx):
+        loss = self.forward(*batch)
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        return loss
+
+
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
