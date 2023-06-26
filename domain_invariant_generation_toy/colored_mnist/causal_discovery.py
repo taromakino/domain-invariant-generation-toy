@@ -28,15 +28,13 @@ def main(args):
     pairwise_test = PAIRWISE_TESTS[args.pairwise_test_name]()
     existing_args = load_file(os.path.join(args.dpath, 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    # data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
-    # model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
-    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
-    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'), map_location='cpu')
+    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
+    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
     y, z = [], []
     with torch.no_grad():
         for x_batch, y_batch, e_batch in data_train:
             x_batch, y_batch, e_batch = x_batch.to(model.device), y_batch.to(model.device), e_batch.to(model.device)
-            u_batch = torch.cat((e_batch, y_batch), dim=1)
+            u_batch = torch.cat((e_batch, y_batch[:, None]), dim=1)
             z_batch = model.q_z_ux_mu(u_batch, x_batch)
             y.append(y_batch.cpu().numpy())
             z.append(z_batch.cpu().numpy())
