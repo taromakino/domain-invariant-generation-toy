@@ -35,7 +35,7 @@ def main(args):
         for x_batch, y_batch, e_batch in data_train:
             x_batch, y_batch, e_batch = x_batch.to(model.device), y_batch.to(model.device), e_batch.to(model.device)
             u_batch = torch.cat((e_batch, y_batch[:, None]), dim=1)
-            z_batch = model.q_z_ux_mu(u_batch, x_batch)
+            z_batch = model.encoder_mu(u_batch, x_batch)
             y.append(y_batch.cpu().numpy())
             z.append(z_batch.cpu().numpy())
     y = np.concatenate(y)
@@ -55,8 +55,9 @@ def main(args):
         neighbor_col_idx = var_names.index(neighbor_name)
         if pairwise_test.predict_proba((data[:, neighbor_col_idx], y.astype('int'))) > 0:
             parent_names.append(neighbor_name)
-    parent_names = set(parent_names)
-    save_file(parent_names, os.path.join(args.dpath, 'parent_names.pkl'))
+    parent_names = sorted(list(set(parent_names)))
+    parent_idxs = np.array([int(parent_name.split('_')[1]) for parent_name in list(parent_names)])
+    save_file(parent_idxs, os.path.join(args.dpath, 'parent_idxs.pkl'))
 
 
 if __name__ == '__main__':

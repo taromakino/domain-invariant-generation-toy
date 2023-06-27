@@ -15,12 +15,15 @@ class Model(pl.LightningModule):
         self.beta = beta
         self.lr = lr
         u_size = e_size + y_size
-        self.q_z_ux_mu = MLP(u_size + x_size, h_sizes, z_size, nn.ReLU)
-        self.q_z_ux_cov = MLP(u_size + x_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
-        self.p_x_uz = MLP(u_size + z_size, h_sizes, x_size, nn.ReLU)
-        self.p_z_u_mu = MLP(u_size, h_sizes, z_size, nn.ReLU)
-        self.p_z_u_cov = MLP(u_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
-        self.p_y_x = MLP(x_size, h_sizes, y_size, nn.ReLU)
+        # q(z|u,x)
+        self.encoder_mu = MLP(u_size + x_size, h_sizes, z_size, nn.ReLU)
+        self.encoder_cov = MLP(u_size + x_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
+        # p(x|z)
+        self.decoder = MLP(z_size, h_sizes, x_size, nn.ReLU)
+        # p(z|u)
+        self.prior_mu = MLP(u_size, h_sizes, z_size, nn.ReLU)
+        self.prior_cov = MLP(u_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
+        self.predictor = MLP(x_size, h_sizes, y_size, nn.ReLU)
 
 
     def sample_z(self, mu, cov):
@@ -32,21 +35,21 @@ class Model(pl.LightningModule):
     def forward(self, x, y, e):
         u = torch.cat((e, y[:, None]), dim=1)
         # z ~ q(z|u,x)
-        mu_z_ux = self.q_z_ux_mu(u, x)
-        cov_z_ux = arr_to_scale_tril(self.q_z_ux_cov(u, x))
+        mu_z_ux = self.encoder_mu(u, x)
+        cov_z_ux = arr_to_scale_tril(self.encoder_cov(u, x))
         z = self.sample_z(mu_z_ux, cov_z_ux)
-        # E_q(z|u,x)[log p(x|u,z)]
-        x_pred = self.p_x_uz(u, z)
+        # E_q(z|u,x)[log p(x|z)]
+        x_pred = self.decoder(z)
         log_prob_x_uz = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # KL(q(z|u,x) || p(z|u))
         dist_z_ux = D.MultivariateNormal(mu_z_ux, scale_tril=cov_z_ux)
-        mu_z_u = self.p_z_u_mu(u)
-        cov_z_u = arr_to_scale_tril(self.p_z_u_cov(u))
+        mu_z_u = self.prior_mu(u)
+        cov_z_u = arr_to_scale_tril(self.prior_cov(u))
         dist_z_u = D.MultivariateNormal(mu_z_u, scale_tril=cov_z_u)
         kl = D.kl_divergence(dist_z_ux, dist_z_u)
         elbo = log_prob_x_uz - kl
         # MSE(y_pred, y)
-        y_pred = self.p_y_x(x)
+        y_pred = self.predictor(x)
         mse_y_x = F.mse_loss(y_pred, y)
         return -elbo.mean() + self.beta * mse_y_x
 
