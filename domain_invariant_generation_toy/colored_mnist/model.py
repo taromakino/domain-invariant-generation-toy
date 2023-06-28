@@ -33,7 +33,7 @@ class Model(pl.LightningModule):
 
 
     def forward(self, x, y, e):
-        u = torch.cat((e, y[:, None]), dim=1)
+        u = torch.cat((y, e), dim=1)
         # z ~ q(z|u,x)
         mu_z_ux = self.encoder_mu(u, x)
         cov_z_ux = arr_to_scale_tril(self.encoder_cov(u, x))
@@ -48,9 +48,9 @@ class Model(pl.LightningModule):
         dist_z_u = D.MultivariateNormal(mu_z_u, scale_tril=cov_z_u)
         kl = D.kl_divergence(dist_z_ux, dist_z_u)
         elbo = log_prob_x_uz - kl
-        # MSE(y_pred, y)
+        # BCE(y_pred, y)
         y_pred = self.predictor(x)
-        mse_y_x = F.mse_loss(y_pred, y)
+        mse_y_x = F.binary_cross_entropy_with_logits(y_pred, y)
         return -elbo.mean() + self.beta * mse_y_x
 
 
