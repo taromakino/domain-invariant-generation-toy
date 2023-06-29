@@ -61,7 +61,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--pairwise_test_name', type=str, default='ANM')
+    parser.add_argument('--pairwise_test_name', type=str, default='RECI')
     parser.add_argument('--n_seeds', type=int, default=5)
     parser.add_argument('--n_envs', type=int, default=5)
     parser.add_argument('--n_examples_per_env', type=int, default=1000)
