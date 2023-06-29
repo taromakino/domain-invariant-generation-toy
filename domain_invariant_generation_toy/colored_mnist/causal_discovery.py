@@ -36,7 +36,7 @@ def main(args):
     z_idxs = [i for i in range(existing_args.z_size)]
     cause_idxs = []
     for z_idx in z_idxs:
-        if pairwise_test.predict_proba((z[:, z_idx], y.astype('int'))) > 0:
+        if pairwise_test.predict_proba((z[:, z_idx], y)) > 0:
             cause_idxs.append(z_idx)
     effect_idxs = np.setdiff1d(z_idxs, cause_idxs)
     write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
