@@ -2,7 +2,7 @@ import numpy as np
 from argparse import ArgumentParser
 from causallearn.search.ConstraintBased.PC import pc
 from cdt.causality.pairwise import ANM, IGCI, RECI
-from data import make_raw_data
+from data import make_data
 
 
 PAIRWISE_TESTS = {
@@ -30,7 +30,7 @@ def main(args):
     pa_ground_truth = set([f'z_c_{i}' for i in range(args.size)])
     ne_results, pa_results = [], []
     for seed in range(args.n_seeds):
-        z_c, y, z_s = make_raw_data(seed, args.n_envs, args.n_examples_per_env, args.size)
+        z_c, y, z_s = make_data(seed, args.n_envs, args.n_examples_per_env, args.size, args.n_components, args.noise_sd)
         var_names = \
             [f'z_c_{i}' for i in range(args.size)] + \
             [f'y_{i}' for i in range(args.size)] + \
@@ -66,6 +66,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_envs', type=int, default=5)
     parser.add_argument('--n_examples_per_env', type=int, default=1000)
     parser.add_argument('--size', type=int, default=10)
+    parser.add_argument('--n_components', type=int, default=5)
+    parser.add_argument('--noise_sd', type=float, default=0.1)
     args = parser.parse_args()
     assert args.size % 2 == 0
     main(args)

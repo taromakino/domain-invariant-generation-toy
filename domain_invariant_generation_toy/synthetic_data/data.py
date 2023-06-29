@@ -1,69 +1,56 @@
-import math
 import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.mixture import GaussianMixture
 
 
 def softplus(x):
     return np.log(1 + np.exp(x))
 
 
-def size_to_n_tril(size):
-    '''
-    Return the number of nonzero entries in a square lower triangular matrix with size rows/columns
-    '''
-    return int(size * (size + 1) / 2)
+def sample_gmm(rng, n_examples, n_components, size):
+    dist = GaussianMixture(n_components, covariance_type='diag')
+    dist.means_ = 2 * rng.randn(n_components, size)
+    dist.covariances_ = softplus(rng.randn(n_components, size))
+    dist.weights_ = abs(rng.randn(n_components))
+    dist.weights_ = dist.weights_ / sum(dist.weights_)
+    return dist.sample(n_examples)[0]
 
 
-def n_tril_to_size(n_tril):
-    '''
-    Return the number of rows/columns in a square lower triangular matrix with n_tril nonzero entries
-    '''
-    return int((-1 + math.sqrt(1 + 8 * n_tril)) / 2)
+def sample_noise(rng, n_examples, size, sd):
+    return rng.multivariate_normal(np.zeros(size), (sd ** 2) * np.eye(size), n_examples)
 
 
-def arr_to_scale_tril(arr):
-    '''
-    Returns a lower triangular matrix with nonzero diagonal entries
-    '''
-    n_envs, n_tri = arr.shape
-    size = n_tril_to_size(n_tri)
-    tril = np.zeros((n_envs, size, size), dtype='float32')
-    tril[:, *np.tril_indices(n=size, m=size)] = arr
-    diag_idxs = np.arange(size)
-    tril[:, diag_idxs, diag_idxs] = softplus(tril[:, diag_idxs, diag_idxs])
-    return tril
+def make_mlp(size, h_size=20):
+    return nn.Sequential(
+        nn.Linear(size, h_size),
+        nn.ReLU(),
+        nn.Linear(h_size, size)
+    )
 
 
-def arr_to_cov_mat(arr):
-    '''
-    Cholesky decomposition A = LL^T
-    '''
-    tril = arr_to_scale_tril(arr)
-    return np.matmul(tril, np.transpose(tril, axes=(0, 2, 1)))
+def forward(mlp, x):
+    return mlp(torch.tensor(x, dtype=torch.float32)).detach().numpy()
 
 
-def make_raw_data(seed, n_envs, n_examples_per_env, size):
+def make_data(seed, n_envs, n_examples_per_env, size, n_components, noise_sd):
     rng = np.random.RandomState(seed)
-
-    z_c_mu = rng.randn(n_envs, size)
-    z_c_cov = arr_to_cov_mat(rng.randn(n_envs, size_to_n_tril(size)))
-
-    z_s_mu = rng.randn(n_envs, size)
-    z_s_cov = arr_to_cov_mat(rng.randn(n_envs, size_to_n_tril(size)))
-
-    A = rng.randn(size, size)
-    y_cov = 0.1 * np.eye(size)
-
     half_size = size // 2
-    B = rng.randn(size, half_size)
 
-    z_c, y, z_s = [], [], []
-    for env_idx in range(n_envs):
-        z_c_env = rng.multivariate_normal(z_c_mu[env_idx], z_c_cov[env_idx], n_examples_per_env)
-        y_env = z_c_env.dot(A) + rng.multivariate_normal(np.zeros(size), y_cov, n_examples_per_env)
-        z_s_env = rng.multivariate_normal(z_s_mu[env_idx], z_s_cov[env_idx], n_examples_per_env)
-        z_s_env[:, :half_size] += y_env.dot(B)
-        z_c.append(z_c_env)
+    zs_to_y = make_mlp(size)
+    y_to_zc = make_mlp(half_size)
+
+    zs, y, zc = [], [], []
+    for _ in range(n_envs):
+        zs_env = sample_gmm(rng, n_examples_per_env, n_components, size)
+        y_env = forward(zs_to_y, zs_env + sample_noise(rng, n_examples_per_env, size, noise_sd))
+        zc_env = sample_gmm(rng, n_examples_per_env, n_components, size)
+        zc_env[:, :half_size] += forward(y_to_zc, y_env[:, :half_size] + zc_env[:, :half_size] +
+            sample_noise(rng, n_examples_per_env, half_size, noise_sd))
+        zs.append(zs_env)
         y.append(y_env)
-        z_s.append(z_s_env)
-    z_c, y, z_s = np.row_stack(z_c), np.row_stack(y), np.row_stack(z_s)
-    return z_c, y, z_s
+        zc.append(zc_env)
+    zs = np.vstack(zs)
+    y = np.vstack(y)
+    zc = np.vstack(zc)
+    return zs, y, zc

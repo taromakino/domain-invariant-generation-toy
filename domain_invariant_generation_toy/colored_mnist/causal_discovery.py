@@ -7,7 +7,7 @@ from causallearn.search.ConstraintBased.PC import pc
 from cdt.causality.pairwise import ANM, IGCI, RECI
 from data import make_data
 from model import Model
-from utils.file import load_file, save_file
+from utils.file import load_file, write
 
 
 PAIRWISE_TESTS = {
@@ -34,7 +34,7 @@ def main(args):
     with torch.no_grad():
         for x_batch, y_batch, e_batch in data_train:
             x_batch, y_batch, e_batch = x_batch.to(model.device), y_batch.to(model.device), e_batch.to(model.device)
-            u_batch = torch.cat((e_batch, y_batch[:, None]), dim=1)
+            u_batch = torch.cat((y_batch, e_batch), dim=1)
             z_batch = model.encoder_mu(u_batch, x_batch)
             y.append(y_batch.cpu().numpy())
             z.append(z_batch.cpu().numpy())
@@ -49,6 +49,7 @@ def main(args):
         ['y'] + \
         [f'z_{i}' for i in range(existing_args.z_size)]
     neighbor_names = get_neighbor_names(cg, 'y', var_names, node_names)
+    neighbor_idxs = [int(neighbor_name.split('_')[1]) for neighbor_name in list(neighbor_names)]
 
     parent_names = []
     for neighbor_name in neighbor_names:
@@ -56,8 +57,10 @@ def main(args):
         if pairwise_test.predict_proba((data[:, neighbor_col_idx], y.astype('int'))) > 0:
             parent_names.append(neighbor_name)
     parent_names = sorted(list(set(parent_names)))
-    parent_idxs = np.array([int(parent_name.split('_')[1]) for parent_name in list(parent_names)])
-    save_file(parent_idxs, os.path.join(args.dpath, 'parent_idxs.pkl'))
+    cause_idxs = [int(parent_idx.split('_')[1]) for parent_idx in list(parent_names)]
+    effect_idxs = list(np.setdiff1d(neighbor_idxs, cause_idxs))
+    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
+    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
 
 
 if __name__ == '__main__':
