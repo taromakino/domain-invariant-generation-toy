@@ -8,10 +8,9 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class Model(pl.LightningModule):
-    def __init__(self, x_size, y_size, e_size, z_size, h_sizes, beta, lr):
+    def __init__(self, x_size, y_size, e_size, z_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
-        self.beta = beta
         self.lr = lr
         u_size = e_size + y_size
         # q(z|u,x)
@@ -22,7 +21,6 @@ class Model(pl.LightningModule):
         # p(z|u)
         self.prior_mu = MLP(u_size, h_sizes, z_size, nn.ReLU)
         self.prior_cov = MLP(u_size, h_sizes, size_to_n_tril(z_size), nn.ReLU)
-        self.predictor = MLP(x_size, h_sizes, y_size, nn.ReLU)
 
 
     def sample_z(self, mu, cov):
@@ -47,10 +45,7 @@ class Model(pl.LightningModule):
         dist_z_u = D.MultivariateNormal(mu_z_u, scale_tril=cov_z_u)
         kl = D.kl_divergence(dist_z_ux, dist_z_u)
         elbo = log_prob_x_uz - kl
-        # BCE(y_pred, y)
-        y_pred = self.predictor(x)
-        mse_y_x = F.binary_cross_entropy_with_logits(y_pred, y)
-        return -elbo.mean() + self.beta * mse_y_x
+        return -elbo.mean()
 
 
     def training_step(self, batch, batch_idx):
