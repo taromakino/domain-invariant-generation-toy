@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import torch
+from scipy.special import expit as sigmoid
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import datasets
 
@@ -10,29 +11,25 @@ def make_dataloader(data_tuple, batch_size, n_workers, is_train):
         pin_memory=True, persistent_workers=True)
 
 
-def make_environment(images, labels, e_prob, e_arr):
-    def torch_bernoulli(p, size):
-        return (torch.rand(size) < p).float()
-
-    def torch_xor(a, b):
-        return (a - b).abs()  # Assumes both inputs are either 0 or 1
-
-    # 2x subsample for computational convenience
+def make_environment(rng, images, digits, temperature, e_arr):
     images = images.reshape((-1, 28, 28))[:, ::2, ::2]
-    # Assign a binary label based on the digit; flip label with probability 0.25
-    labels = (labels < 5).float()
-    labels = torch_xor(labels, torch_bernoulli(0.25, len(labels)))
-    # Assign a color based on the label; flip the color with probability e
-    colors = torch_xor(labels, torch_bernoulli(e_prob, len(labels)))
-    # Apply the color to the image by zeroing out the other color channel
+    n = len(images)
+    y = np.full(n, np.nan)
+    binary_digits = (digits < 5).int()
+    for binary_digit in [0, 1]:
+        idxs = np.where(binary_digits == binary_digit)[0]
+        y_noise = rng.beta(2, 2, len(idxs)) - 0.5
+        y[idxs] = 0.25 * (2 * binary_digit - 1) + y_noise
+    y = torch.tensor(y, dtype=torch.float32)
+    z_s = torch.bernoulli(sigmoid(y / temperature)) # Color
     images = torch.stack([images, images], dim=1)
-    images[torch.tensor(range(len(images))), (1 - colors).long(), :, :] *= 0
+    images[torch.tensor(range(len(images))), (1 - z_s).int(), :, :] *= 0
     images = images / 255
     images = images.flatten(start_dim=1)
     e_arr = torch.repeat_interleave(torch.tensor(e_arr, dtype=torch.float32)[None], len(images), dim=0)
     return {
         'x': images,
-        'y': labels[:, None],
+        'y': y[:, None],
         'e': e_arr
     }
 
@@ -43,9 +40,9 @@ def make_data(train_ratio, batch_size, n_workers):
     mnist_train = (mnist.data[:50000], mnist.targets[:50000])
     mnist_val = (mnist.data[50000:], mnist.targets[50000:])
     envs = [
-        make_environment(mnist_train[0][::2], mnist_train[1][::2], 0.2, [1, 0, 0]),
-        make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1, [0, 1, 0]),
-        make_environment(mnist_val[0], mnist_val[1], 0.9, [0, 0, 1])
+        make_environment(rng, mnist_train[0][::2], mnist_train[1][::2], 0.1, [1, 0, 0]),
+        make_environment(rng, mnist_train[0][1::2], mnist_train[1][1::2], 0.01, [0, 1, 0]),
+        make_environment(rng, mnist_val[0], mnist_val[1], -0.01, [0, 0, 1])
     ]
     x_trainval = torch.cat((envs[0]['x'], envs[1]['x']))
     y_trainval = torch.cat((envs[0]['y'], envs[1]['y']))

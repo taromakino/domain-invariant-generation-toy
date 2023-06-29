@@ -2,10 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.mixture import GaussianMixture
-
-
-def softplus(x):
-    return np.log(1 + np.exp(x))
+from utils.stats import softplus, sample_isotropic_mvn
 
 
 def sample_gmm(rng, n_examples, n_components, size):
@@ -15,10 +12,6 @@ def sample_gmm(rng, n_examples, n_components, size):
     dist.weights_ = abs(rng.randn(n_components))
     dist.weights_ = dist.weights_ / sum(dist.weights_)
     return dist.sample(n_examples)[0]
-
-
-def sample_noise(rng, n_examples, size, sd):
-    return rng.multivariate_normal(np.zeros(size), (sd ** 2) * np.eye(size), n_examples)
 
 
 def make_mlp(size, h_size=20):
@@ -43,10 +36,10 @@ def make_data(seed, n_envs, n_examples_per_env, size, n_components, noise_sd):
     zs, y, zc = [], [], []
     for _ in range(n_envs):
         zs_env = sample_gmm(rng, n_examples_per_env, n_components, size)
-        y_env = forward(zs_to_y, zs_env + sample_noise(rng, n_examples_per_env, size, noise_sd))
+        y_env = forward(zs_to_y, zs_env + sample_isotropic_mvn(rng, n_examples_per_env, size, noise_sd))
         zc_env = sample_gmm(rng, n_examples_per_env, n_components, size)
         zc_env[:, :half_size] += forward(y_to_zc, y_env[:, :half_size] + zc_env[:, :half_size] +
-            sample_noise(rng, n_examples_per_env, half_size, noise_sd))
+            sample_isotropic_mvn(rng, n_examples_per_env, half_size, noise_sd))
         zs.append(zs_env)
         y.append(y_env)
         zc.append(zc_env)
