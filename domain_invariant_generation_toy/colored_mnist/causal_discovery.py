@@ -1,29 +1,27 @@
 import numpy as np
-import itertools
 import os
 import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
-from causallearn.utils.KCI import KCI
+from cdt.causality.pairwise import ANM, IGCI, RECI
 from data import make_data
 from model import Model
 from utils.file import load_file, write
 
 
-def get_neighbor_names(cg, var_name, var_names, node_names):
-    var_to_node_name = dict((var_name, node_names[i]) for i, var_name in enumerate(var_names))
-    node_to_var_name = dict((node_name, var_names[i]) for i, node_name in enumerate(node_names))
-    neighbors = cg.G.get_adjacent_nodes(cg.G.get_node(var_to_node_name[var_name]))
-    return [node_to_var_name[neighbor.name] for neighbor in neighbors]
+PAIRWISE_TESTS = {
+    'ANM': ANM,
+    'IGCI': IGCI,
+    'RECI': RECI
+}
 
 
 def main(args):
+    pairwise_test = PAIRWISE_TESTS[args.pairwise_test_name]()
     existing_args = load_file(os.path.join(args.dpath, 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    # data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
-    # model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
-    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
-    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'), map_location='cpu')
+    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
+    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
     y, z = [], []
     with torch.no_grad():
         for x_batch, y_batch, e_batch in data_train:
@@ -35,11 +33,14 @@ def main(args):
     y = np.concatenate(y)
     z = np.concatenate(z)
 
-    # pairs = list(itertools.combinations(np.arange(existing_args.z_size), 2))
-    # for i, j in pairs:
-
-    # write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
-    # write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
+    z_idxs = [i for i in range(existing_args.z_size)]
+    cause_idxs = []
+    for z_idx in z_idxs:
+        if pairwise_test.predict_proba((z[:, z_idx], y)) > 0:
+            cause_idxs.append(z_idx)
+    effect_idxs = np.setdiff1d(z_idxs, cause_idxs)
+    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
+    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
 
 
 if __name__ == '__main__':
