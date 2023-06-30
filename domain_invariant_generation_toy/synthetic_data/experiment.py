@@ -1,4 +1,5 @@
 import numpy as np
+import pytorch_lightning as pl
 from argparse import ArgumentParser
 from causallearn.search.ConstraintBased.PC import pc
 from cdt.causality.pairwise import ANM, IGCI, RECI
@@ -30,6 +31,7 @@ def main(args):
     pa_ground_truth = set([f'z_c_{i}' for i in range(args.size)])
     ne_results, pa_results = [], []
     for seed in range(args.n_seeds):
+        pl.seed_everything(seed)
         z_c, y, z_s = make_data(seed, args.n_envs, args.n_examples_per_env, args.size, args.n_components, args.noise_sd)
         var_names = \
             [f'z_c_{i}' for i in range(args.size)] + \
@@ -62,7 +64,7 @@ def main(args):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--pairwise_test_name', type=str, default='RECI')
-    parser.add_argument('--n_seeds', type=int, default=5)
+    parser.add_argument('--n_seeds', type=int, default=10)
     parser.add_argument('--n_envs', type=int, default=5)
     parser.add_argument('--n_examples_per_env', type=int, default=1000)
     parser.add_argument('--size', type=int, default=10)
