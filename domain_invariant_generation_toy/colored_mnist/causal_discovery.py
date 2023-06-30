@@ -3,6 +3,7 @@ import os
 import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
+from causallearn.search.ConstraintBased.PC import pc
 from cdt.causality.pairwise import ANM, IGCI, RECI
 from data import make_data
 from model import Model
@@ -14,6 +15,13 @@ PAIRWISE_TESTS = {
     'IGCI': IGCI,
     'RECI': RECI
 }
+
+
+def get_neighbor_names(cg, var_name, var_names, node_names):
+    var_to_node_name = dict((var_name, node_names[i]) for i, var_name in enumerate(var_names))
+    node_to_var_name = dict((node_name, var_names[i]) for i, node_name in enumerate(node_names))
+    neighbors = cg.G.get_adjacent_nodes(cg.G.get_node(var_to_node_name[var_name]))
+    return [node_to_var_name[neighbor.name] for neighbor in neighbors]
 
 
 def main(args):
@@ -33,12 +41,24 @@ def main(args):
     y = np.concatenate(y)
     z = np.concatenate(z)
 
-    z_idxs = [i for i in range(existing_args.z_size)]
-    cause_idxs = []
-    for z_idx in z_idxs:
-        if pairwise_test.predict_proba((z[:, z_idx], y)) > 0:
-            cause_idxs.append(z_idx)
-    effect_idxs = np.setdiff1d(z_idxs, cause_idxs)
+    data = np.c_[y, z]
+    cg = pc(data)
+    node_names = cg.G.get_node_names()
+
+    var_names = \
+        ['y'] + \
+        [f'z_{i}' for i in range(existing_args.z_size)]
+    neighbor_names = get_neighbor_names(cg, 'y', var_names, node_names)
+    neighbor_idxs = [int(neighbor_name.split('_')[1]) for neighbor_name in list(neighbor_names)]
+
+    parent_names = []
+    for neighbor_name in neighbor_names:
+        neighbor_col_idx = var_names.index(neighbor_name)
+        if pairwise_test.predict_proba((data[:, neighbor_col_idx], y)) > 0:
+            parent_names.append(neighbor_name)
+    parent_names = sorted(list(set(parent_names)))
+    cause_idxs = [int(parent_idx.split('_')[1]) for parent_idx in list(parent_names)]
+    effect_idxs = list(np.setdiff1d(neighbor_idxs, cause_idxs))
     write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
     write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
 
