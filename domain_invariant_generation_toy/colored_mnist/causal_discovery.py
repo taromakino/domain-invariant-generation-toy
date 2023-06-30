@@ -1,20 +1,13 @@
 import numpy as np
+import itertools
 import os
 import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
-from causallearn.search.ConstraintBased.PC import pc
-from cdt.causality.pairwise import ANM, IGCI, RECI
+from causallearn.utils.KCI import KCI
 from data import make_data
 from model import Model
 from utils.file import load_file, write
-
-
-PAIRWISE_TESTS = {
-    'ANM': ANM,
-    'IGCI': IGCI,
-    'RECI': RECI
-}
 
 
 def get_neighbor_names(cg, var_name, var_names, node_names):
@@ -25,11 +18,12 @@ def get_neighbor_names(cg, var_name, var_names, node_names):
 
 
 def main(args):
-    pairwise_test = PAIRWISE_TESTS[args.pairwise_test_name]()
     existing_args = load_file(os.path.join(args.dpath, 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
-    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
+    # data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, existing_args.n_workers)
+    # model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'))
+    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
+    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'), map_location='cpu')
     y, z = [], []
     with torch.no_grad():
         for x_batch, y_batch, e_batch in data_train:
@@ -41,26 +35,11 @@ def main(args):
     y = np.concatenate(y)
     z = np.concatenate(z)
 
-    data = np.c_[y, z]
-    cg = pc(data)
-    node_names = cg.G.get_node_names()
+    # pairs = list(itertools.combinations(np.arange(existing_args.z_size), 2))
+    # for i, j in pairs:
 
-    var_names = \
-        ['y'] + \
-        [f'z_{i}' for i in range(existing_args.z_size)]
-    neighbor_names = get_neighbor_names(cg, 'y', var_names, node_names)
-    neighbor_idxs = [int(neighbor_name.split('_')[1]) for neighbor_name in list(neighbor_names)]
-
-    parent_names = []
-    for neighbor_name in neighbor_names:
-        neighbor_col_idx = var_names.index(neighbor_name)
-        if pairwise_test.predict_proba((data[:, neighbor_col_idx], y)) > 0:
-            parent_names.append(neighbor_name)
-    parent_names = sorted(list(set(parent_names)))
-    cause_idxs = [int(parent_idx.split('_')[1]) for parent_idx in list(parent_names)]
-    effect_idxs = list(np.setdiff1d(neighbor_idxs, cause_idxs))
-    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
-    write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
+    # write(os.path.join(args.dpath, 'causal_discovery.txt'), f'cause_idxs={cause_idxs}')
+    # write(os.path.join(args.dpath, 'causal_discovery.txt'), f'effect_idxs={effect_idxs}')
 
 
 if __name__ == '__main__':
