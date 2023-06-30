@@ -29,8 +29,7 @@ def make_trainer(dpath, seed, n_epochs, early_stop_ratio):
         callbacks=[
             EarlyStopping(monitor="val_loss", patience=int(early_stop_ratio * n_epochs)),
             ModelCheckpoint(monitor="val_loss", filename="best")],
-        max_epochs=n_epochs,
-        detect_anomaly=True)
+        max_epochs=n_epochs)
 
 
 def size_to_n_tril(size):
