@@ -14,11 +14,11 @@ def sample_gmm(rng, n_examples, n_components, size):
     return dist.sample(n_examples)[0]
 
 
-def make_mlp(size, h_size=20):
+def make_mlp(input_size, output_size, h_size=20):
     return nn.Sequential(
-        nn.Linear(size, h_size),
+        nn.Linear(input_size, h_size),
         nn.ReLU(),
-        nn.Linear(h_size, size)
+        nn.Linear(h_size, output_size)
     )
 
 
@@ -30,20 +30,24 @@ def make_data(seed, n_envs, n_examples_per_env, size, n_components, noise_sd):
     rng = np.random.RandomState(seed)
     half_size = size // 2
 
-    zs_to_y = make_mlp(size)
-    y_to_zc = make_mlp(half_size)
+    zc_to_y = make_mlp(size, 1)
+    y_to_zs = make_mlp(half_size, half_size)
 
-    zs, y, zc = [], [], []
-    for _ in range(n_envs):
-        zs_env = sample_gmm(rng, n_examples_per_env, n_components, size)
-        y_env = forward(zs_to_y, zs_env + sample_isotropic_mvn(rng, n_examples_per_env, size, noise_sd))
+    e, zc, y, zs = [], [], [], []
+    for env_idx in range(n_envs):
+        e_env = np.zeros((n_examples_per_env, n_envs))
+        e_env[:, env_idx] = 1
+        e.append(e_env)
         zc_env = sample_gmm(rng, n_examples_per_env, n_components, size)
-        zc_env[:, :half_size] += forward(y_to_zc, y_env[:, :half_size] + zc_env[:, :half_size] +
+        zc.append(zc_env)
+        y_env = forward(zc_to_y, zc_env + sample_isotropic_mvn(rng, n_examples_per_env, size, noise_sd))
+        y.append(y_env)
+        zs_env = sample_gmm(rng, n_examples_per_env, n_components, size)
+        zs_env[:, :half_size] += forward(y_to_zs, y_env + zs_env[:, :half_size] +
             sample_isotropic_mvn(rng, n_examples_per_env, half_size, noise_sd))
         zs.append(zs_env)
-        y.append(y_env)
-        zc.append(zc_env)
-    zs = np.vstack(zs)
-    y = np.vstack(y)
+    e = np.vstack(e)
     zc = np.vstack(zc)
-    return zs, y, zc
+    y = np.vstack(y)
+    zs = np.vstack(zs)
+    return e, zc, y, zs

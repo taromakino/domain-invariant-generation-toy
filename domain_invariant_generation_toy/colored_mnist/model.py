@@ -8,10 +8,9 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class Model(pl.LightningModule):
-    def __init__(self, x_size, y_size, e_size, z_size, h_sizes, beta, lr):
+    def __init__(self, x_size, y_size, e_size, z_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
-        self.beta = beta
         self.lr = lr
         u_size = e_size + y_size
         # q(z|x,u)
@@ -45,7 +44,7 @@ class Model(pl.LightningModule):
         cov_z_u = arr_to_scale_tril(self.prior_cov(u))
         dist_z_u = D.MultivariateNormal(mu_z_u, scale_tril=cov_z_u)
         kl = D.kl_divergence(dist_z_xu, dist_z_u)
-        elbo = log_prob_x_z - self.beta * kl
+        elbo = log_prob_x_z - kl
         return -elbo.mean()
 
 
