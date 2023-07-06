@@ -80,3 +80,34 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
+
+
+class SpuriousClassifier(pl.LightningModule):
+    def __init__(self, model, y_size, z_size, h_sizes, lr):
+        super().__init__()
+        self.model = model
+        self.model.freeze()
+        self.lr = lr
+        # p(u|z_s)
+        self.p_y_zs = MLP(z_size // 2, h_sizes, y_size, nn.ReLU)
+
+    def forward(self, x, y, e):
+        posterior_mu = self.model.encoder_mu(x, y, e)
+        posterior_cov = arr_to_scale_tril(self.model.encoder_cov(x, y, e))
+        z = self.model.sample_z(posterior_mu, posterior_cov)
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        y_pred = self.p_y_zc(z_s)
+        return F.binary_cross_entropy_with_logits(y_pred, y)
+
+    def training_step(self, batch, batch_idx):
+        loss = self.forward(*batch)
+        self.log('train_loss', loss, on_step=False, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.forward(*batch)
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        return loss
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=self.lr)

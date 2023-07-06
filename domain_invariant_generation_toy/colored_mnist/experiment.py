@@ -2,7 +2,7 @@ import os
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 from data import make_data
-from model import Model
+from model import Model, SpuriousClassifier
 from utils.file import save_file
 from utils.nn_utils import make_trainer
 
@@ -12,8 +12,12 @@ def main(args):
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
     model = Model(2 * 14 * 14, 1, 3, args.z_size, args.h_sizes, args.lr)
-    trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
-    trainer.fit(model, data_train, data_val)
+    model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
+    model_trainer.fit(model, data_train, data_val)
+    spurious_classifier = SpuriousClassifier(model, 1, args.z_size, args.h_sizes, args.lr)
+    spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
+        args.n_epochs, args.early_stop_ratio)
+    spurious_classifier_trainer.fit(spurious_classifier, data_train, data_val)
 
 
 if __name__ == '__main__':
