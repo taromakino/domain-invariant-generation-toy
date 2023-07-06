@@ -83,20 +83,14 @@ class Model(pl.LightningModule):
 
 
 class SpuriousClassifier(pl.LightningModule):
-    def __init__(self, model, y_size, z_size, h_sizes, lr):
+    def __init__(self, y_size, z_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
-        self.model = model
-        self.model.freeze()
         self.lr = lr
         # p(u|z_s)
         self.p_y_zs = MLP(z_size // 2, h_sizes, y_size, nn.ReLU)
 
-    def forward(self, x, y, e):
-        posterior_mu = self.model.encoder_mu(x, y, e)
-        posterior_cov = arr_to_scale_tril(self.model.encoder_cov(x, y, e))
-        z = self.model.sample_z(posterior_mu, posterior_cov)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
+    def forward(self, z_s, y):
         y_pred = self.p_y_zs(z_s)
         return F.binary_cross_entropy_with_logits(y_pred, y)
 
