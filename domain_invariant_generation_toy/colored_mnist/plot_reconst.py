@@ -10,10 +10,11 @@ from utils.plot import plot_red_green_image
 
 
 def main(args):
-    existing_args = load_file(os.path.join(args.dpath, 'args.pkl'))
+    existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
-    model = Model.load_from_checkpoint(os.path.join(args.dpath, 'checkpoints', 'best.ckpt'), map_location='cpu')
+    model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
+        map_location='cpu')
     x, y, e = data_train.dataset[:]
     u = torch.cat((y, e), dim=1)
     z = model.encoder_mu(x, u)
@@ -27,4 +28,5 @@ def main(args):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, required=True)
+    parser.add_argument('--seed', type=int, default=0)
     main(parser.parse_args())

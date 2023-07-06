@@ -17,7 +17,7 @@ def main(args):
     model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'), 
         map_location='cpu')
     p_y_zs = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
-        f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
+        f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu').p_y_zs
     x, y, e = data_train.dataset[:]
     z = model.encoder_mu(x, y, e)
     z_c, z_s = torch.chunk(z, 2, dim=1)
