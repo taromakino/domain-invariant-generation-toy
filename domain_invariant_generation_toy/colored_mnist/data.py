@@ -35,19 +35,15 @@ def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
-    x, y = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
-    n_examples = len(x)
-    n_train = int(train_ratio * n_examples)
-    mnist_train = x[:n_train], y[:n_train]
-    mnist_val = x[n_train:], y[n_train:]
+    images, binary_digits = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
     envs = [
-        make_environment(mnist_train[0][::2], mnist_train[1][::2], 0.2, [1, 0, 0]),
-        make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1, [0, 1, 0]),
-        make_environment(mnist_val[0], mnist_val[1], 0.9, [0, 0, 1])
+        make_environment(images[::2], binary_digits[::2], 0.2, [1, 0, 0]),
+        make_environment(images[1::2], binary_digits[1::2], 0.1, [0, 1, 0])
     ]
     x = torch.cat((envs[0]['x'], envs[1]['x']))
     y = torch.cat((envs[0]['y'], envs[1]['y']))
     e = torch.cat((envs[0]['e'], envs[1]['e']))
+    n_examples = len(x)
     n_train = int(train_ratio * n_examples)
     train_idxs = rng.choice(n_examples, n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_examples), train_idxs)
