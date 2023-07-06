@@ -2,9 +2,9 @@ import math
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class MLP(nn.Module):
@@ -21,6 +21,11 @@ class MLP(nn.Module):
 
     def forward(self, *args):
         return self.module_list(torch.hstack(args))
+
+
+def make_dataloader(data_tuple, batch_size, n_workers, is_train):
+    return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size, num_workers=n_workers,
+        pin_memory=True, persistent_workers=True)
 
 
 def make_trainer(dpath, seed, n_epochs, early_stop_ratio):
@@ -55,5 +60,5 @@ def arr_to_scale_tril(arr):
     cov = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
     cov[:, *torch.tril_indices(size, size)] = arr
     diag_idxs = torch.arange(size)
-    cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
+    cov[:, diag_idxs, diag_idxs] = torch.exp(cov[:, diag_idxs, diag_idxs])
     return cov

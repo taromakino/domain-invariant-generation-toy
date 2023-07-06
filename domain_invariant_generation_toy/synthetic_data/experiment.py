@@ -1,10 +1,10 @@
 import numpy as np
 import pytorch_lightning as pl
 from argparse import ArgumentParser
-from data import make_data
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import minmax_scale
+from synthetic_data.data import make_data
 
 
 def mse(features, target):

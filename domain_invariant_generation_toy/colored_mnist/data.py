@@ -1,13 +1,8 @@
 import numpy as np
 import os
 import torch
-from torch.utils.data import DataLoader, TensorDataset
 from torchvision import datasets
-
-
-def make_dataloader(data_tuple, batch_size, n_workers, is_train):
-    return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size, num_workers=n_workers,
-        pin_memory=True, persistent_workers=True)
+from utils.nn_utils import make_dataloader
 
 
 def make_environment(images, labels, e_prob, e_arr):
@@ -41,8 +36,8 @@ def make_data(train_ratio, batch_size, n_workers):
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
     x, y = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
-    n_total = len(x)
-    n_train = int(train_ratio * n_total)
+    n_examples = len(x)
+    n_train = int(train_ratio * n_examples)
     mnist_train = x[:n_train], y[:n_train]
     mnist_val = x[n_train:], y[n_train:]
     envs = [
@@ -50,15 +45,14 @@ def make_data(train_ratio, batch_size, n_workers):
         make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1, [0, 1, 0]),
         make_environment(mnist_val[0], mnist_val[1], 0.9, [0, 0, 1])
     ]
-    x_trainval = torch.cat((envs[0]['x'], envs[1]['x']))
-    y_trainval = torch.cat((envs[0]['y'], envs[1]['y']))
-    e_trainval = torch.cat((envs[0]['e'], envs[1]['e']))
-    n_trainval = len(x_trainval)
-    n_train = int(train_ratio * n_trainval)
-    train_idxs = rng.choice(n_trainval, n_train, replace=False)
-    val_idxs = np.setdiff1d(np.arange(n_trainval), train_idxs)
-    x_train, y_train, e_train = x_trainval[train_idxs], y_trainval[train_idxs], e_trainval[train_idxs]
-    x_val, y_val, e_val = x_trainval[val_idxs], y_trainval[val_idxs], e_trainval[val_idxs]
+    x = torch.cat((envs[0]['x'], envs[1]['x']))
+    y = torch.cat((envs[0]['y'], envs[1]['y']))
+    e = torch.cat((envs[0]['e'], envs[1]['e']))
+    n_train = int(train_ratio * n_examples)
+    train_idxs = rng.choice(n_examples, n_train, replace=False)
+    val_idxs = np.setdiff1d(np.arange(n_examples), train_idxs)
+    x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
+    x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
     data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
     return data_train, data_val

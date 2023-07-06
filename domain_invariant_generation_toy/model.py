@@ -96,7 +96,7 @@ class SpuriousClassifier(pl.LightningModule):
         posterior_cov = arr_to_scale_tril(self.model.encoder_cov(x, y, e))
         z = self.model.sample_z(posterior_mu, posterior_cov)
         z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.p_y_zc(z_s)
+        y_pred = self.p_y_zs(z_s)
         return F.binary_cross_entropy_with_logits(y_pred, y)
 
     def training_step(self, batch, batch_idx):
