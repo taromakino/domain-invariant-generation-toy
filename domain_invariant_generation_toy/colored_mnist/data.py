@@ -37,8 +37,8 @@ def make_data(train_ratio, batch_size, n_workers):
     binary_idxs = np.where(mnist.targets <= 1)
     images, binary_digits = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
     envs = [
-        make_environment(images[::2], binary_digits[::2], 0.2, [1, 0, 0]),
-        make_environment(images[1::2], binary_digits[1::2], 0.1, [0, 1, 0])
+        make_environment(images[::2], binary_digits[::2], 0.1, [1, 0, 0]),
+        make_environment(images[1::2], binary_digits[1::2], 0.9, [0, 1, 0])
     ]
     x = torch.cat((envs[0]['x'], envs[1]['x']))
     y = torch.cat((envs[0]['y'], envs[1]['y']))
