@@ -2,6 +2,7 @@ import math
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader, TensorDataset
@@ -60,5 +61,5 @@ def arr_to_scale_tril(arr):
     cov = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
     cov[:, *torch.tril_indices(size, size)] = arr
     diag_idxs = torch.arange(size)
-    cov[:, diag_idxs, diag_idxs] = torch.exp(cov[:, diag_idxs, diag_idxs])
+    cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
     return cov
