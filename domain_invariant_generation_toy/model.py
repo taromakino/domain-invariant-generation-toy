@@ -85,6 +85,7 @@ class Model(pl.LightningModule):
 class SpuriousClassifier(pl.LightningModule):
     def __init__(self, model, y_size, z_size, h_sizes, lr):
         super().__init__()
+        self.save_hyperparameters()
         self.model = model
         self.model.freeze()
         self.lr = lr
