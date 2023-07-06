@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--z_size', type=int, default=10)
+    parser.add_argument('--z_size', type=int, default=20)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
@@ -29,4 +29,5 @@ if __name__ == '__main__':
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     parser.add_argument('--n_workers', type=int, default=20)
     args = parser.parse_args()
+    assert args.z_size % 2 == 0
     main(args)

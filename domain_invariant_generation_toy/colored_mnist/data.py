@@ -20,7 +20,6 @@ def make_environment(images, labels, e_prob, e_arr):
     # 2x subsample for computational convenience
     images = images.reshape((-1, 28, 28))[:, ::2, ::2]
     # Assign a binary label based on the digit; flip label with probability 0.25
-    labels = (labels < 5).float()
     labels = torch_xor(labels, torch_bernoulli(0.25, len(labels)))
     # Assign a color based on the label; flip the color with probability e
     colors = torch_xor(labels, torch_bernoulli(e_prob, len(labels)))
@@ -40,8 +39,12 @@ def make_environment(images, labels, e_prob, e_arr):
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
-    mnist_train = (mnist.data[:50000], mnist.targets[:50000])
-    mnist_val = (mnist.data[50000:], mnist.targets[50000:])
+    binary_idxs = np.where(mnist.targets <= 1)
+    x, y = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
+    n_total = len(x)
+    n_train = int(train_ratio * n_total)
+    mnist_train = x[:n_train], y[:n_train]
+    mnist_val = x[n_train:], y[n_train:]
     envs = [
         make_environment(mnist_train[0][::2], mnist_train[1][::2], 0.2, [1, 0, 0]),
         make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1, [0, 1, 0]),
