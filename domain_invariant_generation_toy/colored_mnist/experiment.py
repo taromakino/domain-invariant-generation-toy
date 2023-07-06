@@ -10,9 +10,10 @@ from utils.nn_utils import make_dataloader, make_trainer
 
 def make_zs_y_data(data, model, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
+    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     z = model.encoder_mu(x, y, e)
     z_c, z_s = torch.chunk(z, 2, dim=1)
-    return make_dataloader((z_s.detach(), y), batch_size, n_workers, is_train)
+    return make_dataloader((z_s.detach().cpu(), y.cpu()), batch_size, n_workers, is_train)
 
 
 def main(args):
