@@ -11,7 +11,10 @@ from utils.nn_utils import make_dataloader, make_trainer
 def make_spurious_data(data, model, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
-    z = model.encoder_mu(x, y, e)
+    ye_idx = (y + 2 * e).squeeze().int()
+    n_examples = len(x)
+    z = model.encoder_mu(x).reshape(n_examples, 2 * 2, model.z_size)
+    z = z[torch.arange(n_examples), ye_idx, :]
     z_c, z_s = torch.chunk(z, 2, dim=1)
     return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
