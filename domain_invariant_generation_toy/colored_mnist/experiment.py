@@ -26,7 +26,7 @@ def main(args):
     model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     zs_y_data_train = make_spurious_data(data_train, model, args.batch_size, args.n_workers, True)
     zs_y_data_val = make_spurious_data(data_val, model, args.batch_size, args.n_workers, False)
-    spurious_classifier = SpuriousClassifier(1, 2, args.z_size, args.h_sizes, args.lr)
+    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, args.lr)
     spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
         args.n_epochs, args.early_stop_ratio)
     spurious_classifier_trainer.fit(spurious_classifier, zs_y_data_train, zs_y_data_val)

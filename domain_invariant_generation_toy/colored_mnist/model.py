@@ -89,12 +89,12 @@ class VAE(pl.LightningModule):
 
 
 class SpuriousClassifier(pl.LightningModule):
-    def __init__(self, y_size, e_size, z_size, h_sizes, lr):
+    def __init__(self, z_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         # p(y|z_s, e)
-        self.net = MLP(z_size // 2 + e_size, h_sizes, y_size, nn.ReLU)
+        self.net = MLP(z_size // 2 + 1, h_sizes, 1, nn.ReLU)
 
     def forward(self, z_s, y, e):
         y_pred = self.net(z_s, e)
