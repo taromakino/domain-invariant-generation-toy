@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from model import Model, SpuriousClassifier
+from colored_mnist.model import VAE, SpuriousClassifier
 from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
@@ -20,10 +20,10 @@ def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
-    model = Model(2 * 14 * 14, 1, 2, args.z_size, args.h_sizes, args.lr)
+    model = VAE(2 * 14 * 14, args.z_size, args.h_sizes, args.lr)
     model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     model_trainer.fit(model, data_train, data_val)
-    model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     zs_y_data_train = make_spurious_data(data_train, model, args.batch_size, args.n_workers, True)
     zs_y_data_val = make_spurious_data(data_val, model, args.batch_size, args.n_workers, False)
     spurious_classifier = SpuriousClassifier(1, 2, args.z_size, args.h_sizes, args.lr)

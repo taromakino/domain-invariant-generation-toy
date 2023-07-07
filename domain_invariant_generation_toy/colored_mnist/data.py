@@ -5,7 +5,7 @@ from torchvision import datasets
 from utils.nn_utils import make_dataloader
 
 
-def make_environment(images, labels, e_prob, e_arr):
+def make_environment(images, labels, e_prob):
     def torch_bernoulli(p, size):
         return (torch.rand(size) < p).float()
 
@@ -23,11 +23,9 @@ def make_environment(images, labels, e_prob, e_arr):
     images[torch.tensor(range(len(images))), (1 - colors).long(), :, :] *= 0
     images = images / 255
     images = images.flatten(start_dim=1)
-    e_arr = torch.repeat_interleave(torch.tensor(e_arr, dtype=torch.float32)[None], len(images), dim=0)
     return {
         'x': images,
-        'y': labels[:, None],
-        'e': e_arr
+        'y': labels[:, None]
     }
 
 
@@ -37,12 +35,12 @@ def make_data(train_ratio, batch_size, n_workers):
     binary_idxs = np.where(mnist.targets <= 1)
     images, binary_digits = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
     envs = [
-        make_environment(images[::2], binary_digits[::2], 0.1, [1, 0]),
-        make_environment(images[1::2], binary_digits[1::2], 0.9, [0, 1])
+        make_environment(images[::2], binary_digits[::2], 0.1),
+        make_environment(images[1::2], binary_digits[1::2], 0.9)
     ]
     x = torch.cat((envs[0]['x'], envs[1]['x']))
     y = torch.cat((envs[0]['y'], envs[1]['y']))
-    e = torch.cat((envs[0]['e'], envs[1]['e']))
+    e = torch.cat((torch.zeros(len(envs[0]['x'])), torch.ones(len(envs[1]['x']))))[:, None]
     n_examples = len(x)
     n_train = int(train_ratio * n_examples)
     train_idxs = rng.choice(n_examples, n_train, replace=False)
