@@ -13,11 +13,14 @@ def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
-    model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
-                                     map_location='cpu')
+    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
+        map_location='cpu')
     x, y, e = data_train.dataset[:]
-    z = model.encoder_mu(x, y, e)
-    x_pred = torch.sigmoid(model.decoder(z))
+    ye_idx = (y + 2 * e).squeeze().int()
+    n_examples = len(x)
+    z = vae.encoder_mu(x).reshape(n_examples, 2 * 2, vae.z_size)
+    z = z[torch.arange(n_examples), ye_idx, :]
+    x_pred = torch.sigmoid(vae.decoder(z))
     fig, axes = plt.subplots(1, 2)
     plot_red_green_image(axes[0], x[0].reshape((2, 14, 14)).detach().numpy())
     plot_red_green_image(axes[1], x_pred[0].reshape((2, 14, 14)).detach().numpy())
