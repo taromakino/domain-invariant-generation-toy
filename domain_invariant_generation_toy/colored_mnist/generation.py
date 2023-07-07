@@ -18,11 +18,10 @@ def main(args):
         map_location='cpu')
     p_y_zs = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu').p_y_zs
-    x, y, _ = data_train.dataset[:]
-    # Condition on the environment where digit and color are positively correlated
-    z = model.encoder_mu(x, y, torch.zeros(len(x)))
+    x, y, e = data_train.dataset[:]
+    z = model.encoder_mu(x, y, e)
     z_c, z_s = torch.chunk(z, 2, dim=1)
-    x_seed, y_seed = x[args.example_idx], y[args.example_idx]
+    x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     x_seed, y_seed = x_seed[None], y_seed[None]
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
@@ -54,6 +53,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=20)
-    parser.add_argument('--eta', type=float, default=10)
+    parser.add_argument('--n_steps_per_col', type=int, default=100)
+    parser.add_argument('--eta', type=float, default=1)
     main(parser.parse_args())

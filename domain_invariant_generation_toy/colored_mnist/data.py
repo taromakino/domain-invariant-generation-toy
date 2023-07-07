@@ -5,7 +5,7 @@ from torchvision import datasets
 from utils.nn_utils import make_dataloader
 
 
-def make_environment(images, labels, flip_prob):
+def make_environment(images, labels, e_prob, e_arr):
     def torch_bernoulli(p, size):
         return (torch.rand(size) < p).float()
 
@@ -15,17 +15,19 @@ def make_environment(images, labels, flip_prob):
     # 2x subsample for computational convenience
     images = images.reshape((-1, 28, 28))[:, ::2, ::2]
     # Assign a binary label based on the digit; flip label with probability 0.25
-    labels = torch_xor(labels, torch_bernoulli(0.1, len(labels)))
+    labels = torch_xor(labels, torch_bernoulli(0.25, len(labels)))
     # Assign a color based on the label; flip the color with probability e
-    colors = torch_xor(labels, torch_bernoulli(flip_prob, len(labels)))
+    colors = torch_xor(labels, torch_bernoulli(e_prob, len(labels)))
     # Apply the color to the image by zeroing out the other color channel
     images = torch.stack([images, images], dim=1)
     images[torch.tensor(range(len(images))), (1 - colors).long(), :, :] *= 0
     images = images / 255
     images = images.flatten(start_dim=1)
+    e_arr = torch.repeat_interleave(torch.tensor(e_arr, dtype=torch.float32)[None], len(images), dim=0)
     return {
         'x': images,
-        'y': labels[:, None]
+        'y': labels[:, None],
+        'e': e_arr
     }
 
 
@@ -35,12 +37,12 @@ def make_data(train_ratio, batch_size, n_workers):
     binary_idxs = np.where(mnist.targets <= 1)
     images, binary_digits = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
     envs = [
-        make_environment(images[::2], binary_digits[::2], 0.1),
-        make_environment(images[1::2], binary_digits[1::2], 0.9)
+        make_environment(images[::2], binary_digits[::2], 0.1, [1, 0]),
+        make_environment(images[1::2], binary_digits[1::2], 0.9, [0, 1])
     ]
     x = torch.cat((envs[0]['x'], envs[1]['x']))
     y = torch.cat((envs[0]['y'], envs[1]['y']))
-    e = torch.cat((torch.zeros(len(x)), torch.ones(len(x))))[:, None]
+    e = torch.cat((envs[0]['e'], envs[1]['e']))
     n_examples = len(x)
     n_train = int(train_ratio * n_examples)
     train_idxs = rng.choice(n_examples, n_train, replace=False)
