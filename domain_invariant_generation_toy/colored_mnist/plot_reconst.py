@@ -16,8 +16,7 @@ def main(args):
     model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     x, y, e = data_train.dataset[:]
-    u = torch.cat((y, e), dim=1)
-    z = model.encoder_mu(x, u)
+    z = model.encoder_mu(x, y, e)
     x_pred = torch.sigmoid(model.decoder(z))
     fig, axes = plt.subplots(1, 2)
     plot_red_green_image(axes[0], x[0].reshape((2, 14, 14)).detach().numpy())

@@ -20,7 +20,7 @@ def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
-    model = Model(2 * 14 * 14, 1, 3, args.z_size, args.h_sizes, args.lr)
+    model = Model(2 * 14 * 14, 1, 1, args.z_size, args.h_sizes, args.lr)
     model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     model_trainer.fit(model, data_train, data_val)
     model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
