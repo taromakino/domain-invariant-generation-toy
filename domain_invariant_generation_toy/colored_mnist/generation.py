@@ -23,7 +23,7 @@ def main(args):
     z_c, z_s = torch.chunk(z, 2, dim=1)
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     # Generate in the environment where y and color are positively correlated
-    assert torch.allclose(e_seed, torch.tensor([1., 0.]))
+    assert torch.allclose(e_seed, torch.tensor([0.]))
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
@@ -38,7 +38,7 @@ def main(args):
             loss_causal = F.binary_cross_entropy_with_logits(y_pred_causal, 1 - y_seed)
             grad_causal = torch.autograd.grad(loss_causal, zc_perturb)[0]
             zc_perturb = zc_perturb - args.eta * grad_causal
-            loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed)
+            loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
             grad_spurious = torch.autograd.grad(loss_spurious, zs_perturb)[0]
             zs_perturb = zs_perturb - args.eta * grad_spurious
         x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed)))
