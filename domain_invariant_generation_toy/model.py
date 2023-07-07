@@ -83,15 +83,15 @@ class Model(pl.LightningModule):
 
 
 class SpuriousClassifier(pl.LightningModule):
-    def __init__(self, y_size, z_size, h_sizes, lr):
+    def __init__(self, y_size, e_size, z_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        # p(u|z_s)
-        self.p_y_zs = MLP(z_size // 2, h_sizes, y_size, nn.ReLU)
+        # p(y|z_s, e)
+        self.p_y_zs = MLP(z_size // 2 + e_size, h_sizes, y_size, nn.ReLU)
 
-    def forward(self, z_s, y):
-        y_pred = self.p_y_zs(z_s)
+    def forward(self, z_s, y, e):
+        y_pred = self.p_y_zs(z_s, e)
         return F.binary_cross_entropy_with_logits(y_pred, y)
 
     def training_step(self, batch, batch_idx):

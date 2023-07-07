@@ -8,12 +8,12 @@ from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
 
-def make_zs_y_data(data, model, batch_size, n_workers, is_train):
+def make_spurious_data(data, model, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     z = model.encoder_mu(x, y, e)
     z_c, z_s = torch.chunk(z, 2, dim=1)
-    return make_dataloader((z_s.detach().cpu(), y.cpu()), batch_size, n_workers, is_train)
+    return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
 
 def main(args):
@@ -24,9 +24,9 @@ def main(args):
     model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     model_trainer.fit(model, data_train, data_val)
     model = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    zs_y_data_train = make_zs_y_data(data_train, model, args.batch_size, args.n_workers, True)
-    zs_y_data_val = make_zs_y_data(data_val, model, args.batch_size, args.n_workers, False)
-    spurious_classifier = SpuriousClassifier(1, args.z_size, args.h_sizes, args.lr)
+    zs_y_data_train = make_spurious_data(data_train, model, args.batch_size, args.n_workers, True)
+    zs_y_data_val = make_spurious_data(data_val, model, args.batch_size, args.n_workers, False)
+    spurious_classifier = SpuriousClassifier(1, 2, args.z_size, args.h_sizes, args.lr)
     spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
         args.n_epochs, args.early_stop_ratio)
     spurious_classifier_trainer.fit(spurious_classifier, zs_y_data_train, zs_y_data_val)
