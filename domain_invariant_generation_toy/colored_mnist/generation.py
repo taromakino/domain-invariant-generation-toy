@@ -22,6 +22,8 @@ def main(args):
     z = model.encoder_mu(x, y, e)
     z_c, z_s = torch.chunk(z, 2, dim=1)
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
+    # Generate in the environment where y and color are positively correlated
+    assert torch.allclose(e_seed, torch.tensor([1., 0.]))
     x_seed, y_seed = x_seed[None], y_seed[None]
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
@@ -53,6 +55,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=100)
-    parser.add_argument('--eta', type=float, default=1)
+    parser.add_argument('--n_steps_per_col', type=int, default=20)
+    parser.add_argument('--eta', type=float, default=10)
     main(parser.parse_args())
