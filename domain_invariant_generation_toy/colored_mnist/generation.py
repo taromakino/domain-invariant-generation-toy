@@ -38,6 +38,9 @@ def main(args):
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
     fig, axes = plt.subplots(2, args.n_cols)
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
     plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
