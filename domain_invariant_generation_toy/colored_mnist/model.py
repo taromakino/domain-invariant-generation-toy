@@ -20,21 +20,21 @@ class VAE(pl.LightningModule):
         self.image_encoder = nn.Sequential(
             nn.Conv2d(2, 32, 4, 2, 1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.Conv2d(32, 128, 4, 2, 1),
             nn.ReLU(),
-            nn.Conv2d(64, 128, 7, 1, 0),
+            nn.Conv2d(128, 512, 7, 1, 0),
             nn.ReLU(),
-            nn.Conv2d(128, 50, 1, 1, 0),
+            nn.Conv2d(512, 100, 1, 1, 0),
         )
-        self.encoder_mu = MLP(50, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
-        self.encoder_cov = MLP(50, h_sizes, n_classes * n_envs * size_to_n_tril(z_size), nn.ReLU)
+        self.encoder_mu = MLP(100, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
+        self.encoder_cov = MLP(100, h_sizes, n_classes * n_envs * size_to_n_tril(z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(z_size, 128, 1, 1, 0),
+            nn.ConvTranspose2d(z_size, 512, 1, 1, 0),
             nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, 7, 1, 0),
+            nn.ConvTranspose2d(512, 128, 7, 1, 0),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),
+            nn.ConvTranspose2d(128, 32, 4, 2, 1),
             nn.ReLU(),
             nn.ConvTranspose2d(32, 2, 4, 2, 1)
         )

@@ -20,10 +20,14 @@ def main(args):
     spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
     x, y, e = data_train.dataset[:]
+    n_classes = int(y.max() + 1)
+    n_envs = int(e.max() + 1)
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
     n_examples = len(x)
-    z = vae.encoder_mu(x).reshape(n_examples, vae.n_classes, vae.n_envs, vae.z_size)
+    image_embedding = vae.image_encoder(x).flatten(start_dim=1)
+    z = vae.encoder_mu(image_embedding)
+    z = z.reshape(n_examples, n_classes, n_envs, vae.z_size)
     z = z[torch.arange(n_examples), y_idx, e_idx, :].detach()
     z_c, z_s = torch.chunk(z, 2, dim=1)
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
@@ -33,8 +37,8 @@ def main(args):
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
     fig, axes = plt.subplots(2, args.n_cols)
-    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 14, 14)).detach().numpy())
-    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 14, 14)).detach().numpy())
+    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
     zc_optim = Adam([zc_perturb], lr=args.lr)
@@ -50,10 +54,10 @@ def main(args):
             loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
             loss_spurious.backward()
             zs_optim.step()
-        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed)))
-        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb)))
-        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 14, 14)).detach().numpy())
-        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 14, 14)).detach().numpy())
+        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None])
+        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None])
+        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
+        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
 
 

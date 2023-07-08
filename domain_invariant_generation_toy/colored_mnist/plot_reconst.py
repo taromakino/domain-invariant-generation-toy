@@ -16,14 +16,19 @@ def main(args):
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     x, y, e = data_train.dataset[:]
-    ye_idx = (y + 2 * e).squeeze().int()
+    n_classes = int(y.max() + 1)
+    n_envs = int(e.max() + 1)
+    y_idx = y.squeeze().int()
+    e_idx = e.squeeze().int()
     n_examples = len(x)
-    z = vae.encoder_mu(x).reshape(n_examples, 2 * 2, vae.z_size)
-    z = z[torch.arange(n_examples), ye_idx, :]
-    x_pred = torch.sigmoid(vae.decoder(z))
+    image_embedding = vae.image_encoder(x).flatten(start_dim=1)
+    z = vae.encoder_mu(image_embedding)
+    z = z.reshape(n_examples, n_classes, n_envs, vae.z_size)
+    z = z[torch.arange(n_examples), y_idx, e_idx, :]
+    x_pred = torch.sigmoid(vae.decoder(z[:, :, None, None]))
     fig, axes = plt.subplots(1, 2)
-    plot_red_green_image(axes[0], x[0].reshape((2, 14, 14)).detach().numpy())
-    plot_red_green_image(axes[1], x_pred[0].reshape((2, 14, 14)).detach().numpy())
+    plot_red_green_image(axes[0], x[0].reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[1], x_pred[0].reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
 
 
