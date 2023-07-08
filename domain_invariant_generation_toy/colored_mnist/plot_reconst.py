@@ -24,7 +24,7 @@ def main(args):
     posterior_dist_spurious = vae.posterior_dist_spurious(image_embedding, y_idx, e_idx)
     z_c = posterior_dist_causal.loc
     z_s = posterior_dist_spurious.loc
-    z = torch.cat((z_c, z_s))
+    z = torch.cat((z_c, z_s), dim=1)
     x_pred = torch.sigmoid(vae.decoder(z[:, :, None, None]))
     fig, axes = plt.subplots(1, 2)
     plot_red_green_image(axes[0], x[0].reshape((2, 28, 28)).detach().numpy())

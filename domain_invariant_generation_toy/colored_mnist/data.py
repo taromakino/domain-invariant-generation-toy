@@ -12,6 +12,8 @@ def make_environment(images, labels, e_prob):
     def torch_xor(a, b):
         return (a - b).abs()  # Assumes both inputs are either 0 or 1
 
+    # 2x subsample for computational convenience
+    images = images.reshape((-1, 28, 28))[:, ::2, ::2]
     # Assign a binary label based on the digit; flip label with probability 0.25
     labels = torch_xor(labels, torch_bernoulli(0.25, len(labels)))
     # Assign a color based on the label; flip the color with probability e
@@ -20,6 +22,7 @@ def make_environment(images, labels, e_prob):
     images = torch.stack([images, images], dim=1)
     images[torch.tensor(range(len(images))), (1 - colors).long(), :, :] *= 0
     images = images / 255
+    images = images.flatten(start_dim=1)
     return {
         'x': images,
         'y': labels[:, None]

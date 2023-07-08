@@ -8,7 +8,7 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, z_size, h_sizes, n_classes, n_envs, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
@@ -16,34 +16,12 @@ class VAE(pl.LightningModule):
         self.n_envs = n_envs
         self.z_size = z_size
         # q(z_c,z_s|x,y,e)
-        self.image_encoder = nn.Sequential(
-            nn.Conv2d(2, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.Conv2d(32, 128, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.Conv2d(128, 512, 7, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(512),
-            nn.Conv2d(512, 100, 1, 1, 0),
-        )
-        self.encoder_mu_causal = MLP(100, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
-        self.encoder_cov_causal = MLP(100, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
-        self.encoder_mu_spurious = MLP(100, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
-        self.encoder_cov_spurious = MLP(100, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
+        self.encoder_mu_causal = MLP(x_size, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
+        self.encoder_cov_causal = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
+        self.encoder_mu_spurious = MLP(x_size, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
+        self.encoder_cov_spurious = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(2 * z_size, 512, 1, 1, 0),
-            nn.ReLU(),
-            nn.ConvTranspose2d(512, 128, 7, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.ConvTranspose2d(128, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.ConvTranspose2d(32, 2, 4, 2, 1)
-        )
+        self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
         # p(y|z_c)
         self.causal_classifier = MLP(self.z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
@@ -61,18 +39,16 @@ class VAE(pl.LightningModule):
         y_idx = y.squeeze().int()
         e_idx = e.squeeze().int()
         # z_c ~ q(z_c|x,y,e)
-        image_embedding = self.image_encoder(x).flatten(start_dim=1)
-        posterior_dist_causal = self.posterior_dist_causal(image_embedding, y_idx, e_idx)
+        posterior_dist_causal = self.posterior_dist_causal(x, y_idx, e_idx)
         z_c = posterior_dist_causal.sample()
         # z_s ~ q(z_s|x,y,e)
-        posterior_dist_spurious = self.posterior_dist_spurious(image_embedding, y_idx, e_idx)
+        posterior_dist_spurious = self.posterior_dist_spurious(x, y_idx, e_idx)
         z_s = posterior_dist_spurious.sample()
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         z = torch.cat((z_c, z_s), dim=1)
-        x_pred = self.decoder(z[:, :, None, None]).flatten(start_dim=1)
-        x = x.flatten(start_dim=1)
+        x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
-        # E_q(z_c,z_s|x,y,e)[log p(y|z_c)]
+        # E_q(z_c|x,y,e)[log p(y|z_c)]
         y_pred = self.causal_classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
         # KL(q(z_c|x,y,e) || p(z_c|e)
@@ -84,23 +60,23 @@ class VAE(pl.LightningModule):
         elbo = log_prob_x_z + log_prob_y_zc - kl_causal - kl_spurious
         return -elbo.mean()
 
-    def posterior_dist_causal(self, image_embedding, y_idx, e_idx):
-        batch_size = len(image_embedding)
-        posterior_mu_causal = self.encoder_mu_causal(image_embedding)
+    def posterior_dist_causal(self, x, y_idx, e_idx):
+        batch_size = len(x)
+        posterior_mu_causal = self.encoder_mu_causal(x)
         posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
         posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_cov_causal = self.encoder_cov_causal(image_embedding)
+        posterior_cov_causal = self.encoder_cov_causal(x)
         posterior_cov_causal = posterior_cov_causal.reshape(batch_size, self.n_classes, self.n_envs,
             size_to_n_tril(self.z_size))
         posterior_cov_causal = arr_to_scale_tril(posterior_cov_causal[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_causal)
 
-    def posterior_dist_spurious(self, image_embedding, y_idx, e_idx):
-        batch_size = len(image_embedding)
-        posterior_mu_spurious = self.encoder_mu_spurious(image_embedding)
+    def posterior_dist_spurious(self, x, y_idx, e_idx):
+        batch_size = len(x)
+        posterior_mu_spurious = self.encoder_mu_spurious(x)
         posterior_mu_spurious = posterior_mu_spurious.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
         posterior_mu_spurious = posterior_mu_spurious[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_cov_spurious = self.encoder_cov_spurious(image_embedding)
+        posterior_cov_spurious = self.encoder_cov_spurious(x)
         posterior_cov_spurious = posterior_cov_spurious.reshape(batch_size, self.n_classes, self.n_envs,
             size_to_n_tril(self.z_size))
         posterior_cov_spurious = arr_to_scale_tril(posterior_cov_spurious[torch.arange(batch_size), y_idx, e_idx, :])
