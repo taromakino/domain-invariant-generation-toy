@@ -25,8 +25,8 @@ def main(args):
     e_idx = e.squeeze().int()
     posterior_dist_causal = vae.posterior_dist_causal(x, y_idx, e_idx)
     posterior_dist_spurious = vae.posterior_dist_spurious(x, y_idx, e_idx)
-    z_c = posterior_dist_causal.loc
-    z_s = posterior_dist_spurious.loc
+    z_c = posterior_dist_causal.loc.detach()
+    z_s = posterior_dist_spurious.loc.detach()
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     # Generate in the environment where y and color are positively correlated
     assert torch.allclose(e_seed, torch.tensor([0.]))
@@ -67,6 +67,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=1000)
-    parser.add_argument('--lr', type=float, default=1)
+    parser.add_argument('--n_steps_per_col', type=int, default=5000)
+    parser.add_argument('--lr', type=float, default=10)
     main(parser.parse_args())
