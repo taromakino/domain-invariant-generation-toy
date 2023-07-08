@@ -8,27 +8,29 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         self.z_size = z_size
+        self.n_classes = n_classes
+        self.n_envs = n_envs
         self.half_z_size = z_size // 2
         # q(z_c,z_s|x,y,e)
-        self.encoder_mu = MLP(x_size, h_sizes, 2 * 2 * z_size, nn.ReLU)
-        self.encoder_cov = MLP(x_size, h_sizes, 2 * 2 * size_to_n_tril(z_size), nn.ReLU)
+        self.encoder_mu = MLP(x_size, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
+        self.encoder_cov = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = MLP(z_size, h_sizes, x_size, nn.ReLU)
         # p(y|z_c)
         self.causal_classifier = MLP(self.half_z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
-        self.prior_mu_causal = nn.Parameter(torch.zeros(2, self.half_z_size))
-        self.prior_cov_causal = nn.Parameter(torch.zeros(2, size_to_n_tril(self.half_z_size)))
+        self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.half_z_size))
+        self.prior_cov_causal = nn.Parameter(torch.zeros(n_envs, size_to_n_tril(self.half_z_size)))
         nn.init.xavier_normal_(self.prior_mu_causal)
         nn.init.xavier_normal_(self.prior_cov_causal)
         # p(z_s|y,e)
-        self.prior_mu_spurious = nn.Parameter(torch.zeros(2 * 2, self.half_z_size))
-        self.prior_cov_spurious = nn.Parameter(torch.zeros(2 * 2, size_to_n_tril(self.half_z_size)))
+        self.prior_mu_spurious = nn.Parameter(torch.zeros(n_classes, n_envs, self.half_z_size))
+        self.prior_cov_spurious = nn.Parameter(torch.zeros(n_classes, n_envs, size_to_n_tril(self.half_z_size)))
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
 
@@ -39,13 +41,13 @@ class VAE(pl.LightningModule):
 
     def forward(self, x, y, e):
         batch_size = len(x)
+        y_idx = y.squeeze().int()
         e_idx = e.squeeze().int()
-        ye_idx = (y + 2 * e).squeeze().int()
         # z_c, z_s ~ q(z_c,z_s|x,y,e)
-        posterior_mu = self.encoder_mu(x).reshape(batch_size, 2 * 2, self.z_size)
-        posterior_mu = posterior_mu[torch.arange(batch_size), ye_idx, :]
-        posterior_cov = self.encoder_cov(x).reshape(batch_size, 2 * 2, size_to_n_tril(self.z_size))
-        posterior_cov = arr_to_scale_tril(posterior_cov[torch.arange(batch_size), ye_idx, :])
+        posterior_mu = self.encoder_mu(x).reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
+        posterior_mu = posterior_mu[torch.arange(batch_size), y_idx, e_idx, :]
+        posterior_cov = self.encoder_cov(x).reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
+        posterior_cov = arr_to_scale_tril(posterior_cov[torch.arange(batch_size), y_idx, e_idx, :])
         z = self.sample_z(posterior_mu, posterior_cov)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
@@ -57,7 +59,7 @@ class VAE(pl.LightningModule):
         # KL(q(z_c,z_s|x,u) || p(z_c|e)p(z_s|y,e))
         posterior_dist = D.MultivariateNormal(posterior_mu, scale_tril=posterior_cov)
         prior_mu_causal, prior_cov_causal = self.prior_causal_params(e_idx)
-        prior_mu_spurious, prior_cov_spurious = self.prior_spurious_params(ye_idx)
+        prior_mu_spurious, prior_cov_spurious = self.prior_spurious_params(y_idx, e_idx)
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
         # Block diagonal covariance matrix
         prior_cov = torch.zeros(batch_size, self.z_size, self.z_size, device=self.device)
@@ -74,9 +76,9 @@ class VAE(pl.LightningModule):
         prior_cov_causal = torch.bmm(prior_cov_tril_causal, torch.transpose(prior_cov_tril_causal, 1, 2))
         return prior_mu_causal, prior_cov_causal
 
-    def prior_spurious_params(self, ye_idx):
-        prior_mu_spurious = self.prior_mu_spurious[ye_idx]
-        prior_cov_tril_spurious = arr_to_scale_tril(self.prior_cov_spurious[ye_idx])
+    def prior_spurious_params(self, y_idx, e_idx):
+        prior_mu_spurious = self.prior_mu_spurious[y_idx, e_idx]
+        prior_cov_tril_spurious = arr_to_scale_tril(self.prior_cov_spurious[y_idx, e_idx])
         prior_cov_spurious = torch.bmm(prior_cov_tril_spurious, torch.transpose(prior_cov_tril_spurious, 1, 2))
         return prior_mu_spurious, prior_cov_spurious
 

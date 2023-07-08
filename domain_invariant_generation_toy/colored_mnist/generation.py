@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
 from colored_mnist.model import VAE, SpuriousClassifier
+from torch.optim import Adam
 from utils.file import load_file
 from utils.plot import plot_red_green_image
 
@@ -18,11 +19,12 @@ def main(args):
         map_location='cpu')
     spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
-    x, y, e = data_val.dataset[:]
-    ye_idx = (y + 2 * e).squeeze().int()
+    x, y, e = data_train.dataset[:]
+    y_idx = y.squeeze().int()
+    e_idx = e.squeeze().int()
     n_examples = len(x)
-    z = vae.encoder_mu(x).reshape(n_examples, 2 * 2, vae.z_size)
-    z = z[torch.arange(n_examples), ye_idx, :]
+    z = vae.encoder_mu(x).reshape(n_examples, vae.n_classes, vae.n_envs, vae.z_size)
+    z = z[torch.arange(n_examples), y_idx, e_idx, :].detach()
     z_c, z_s = torch.chunk(z, 2, dim=1)
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     # Generate in the environment where y and color are positively correlated
@@ -35,15 +37,19 @@ def main(args):
     plot_red_green_image(axes[1, 0], x_seed.reshape((2, 14, 14)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
+    zc_optim = Adam([zc_perturb], lr=args.lr)
+    zs_optim = Adam([zs_perturb], lr=args.lr)
     for col_idx in range(1, args.n_cols):
         for _ in range(args.n_steps_per_col):
+            zc_optim.zero_grad()
             y_pred_causal = vae.causal_classifier(zc_perturb)
             loss_causal = F.binary_cross_entropy_with_logits(y_pred_causal, 1 - y_seed)
-            grad_causal = torch.autograd.grad(loss_causal, zc_perturb)[0]
-            zc_perturb = zc_perturb - args.eta * grad_causal
+            loss_causal.backward()
+            zc_optim.step()
+            zs_optim.zero_grad()
             loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
-            grad_spurious = torch.autograd.grad(loss_spurious, zs_perturb)[0]
-            zs_perturb = zs_perturb - args.eta * grad_spurious
+            loss_spurious.backward()
+            zs_optim.step()
         x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed)))
         x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb)))
         plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 14, 14)).detach().numpy())
@@ -57,6 +63,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=10000)
-    parser.add_argument('--eta', type=float, default=10)
+    parser.add_argument('--n_steps_per_col', type=int, default=1000)
+    parser.add_argument('--lr', type=float, default=0.1)
     main(parser.parse_args())

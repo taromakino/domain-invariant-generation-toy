@@ -8,13 +8,14 @@ from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
 
-def make_spurious_data(data, model, batch_size, n_workers, is_train):
+def make_spurious_data(data, model, n_classes, n_envs, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
-    ye_idx = (y + 2 * e).squeeze().int()
+    y_idx = y.squeeze().int()
+    e_idx = e.squeeze().int()
     n_examples = len(x)
-    z = model.encoder_mu(x).reshape(n_examples, 2 * 2, model.z_size)
-    z = z[torch.arange(n_examples), ye_idx, :]
+    z = model.encoder_mu(x).reshape(n_examples, n_classes, n_envs, model.z_size)
+    z = z[torch.arange(n_examples), y_idx, e_idx, :]
     z_c, z_s = torch.chunk(z, 2, dim=1)
     return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
@@ -23,12 +24,15 @@ def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
-    model = VAE(2 * 14 * 14, args.z_size, args.h_sizes, args.lr)
+    _, y, e = data_train.dataset[:]
+    n_classes = int(y.max() + 1)
+    n_envs = int(e.max() + 1)
+    model = VAE(2 * 14 * 14, args.z_size, args.h_sizes, n_classes, n_envs, args.lr)
     model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     model_trainer.fit(model, data_train, data_val)
     model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    zs_y_data_train = make_spurious_data(data_train, model, args.batch_size, args.n_workers, True)
-    zs_y_data_val = make_spurious_data(data_val, model, args.batch_size, args.n_workers, False)
+    zs_y_data_train = make_spurious_data(data_train, model, n_classes, n_envs, args.batch_size, args.n_workers, True)
+    zs_y_data_val = make_spurious_data(data_val, model, n_classes, n_envs, args.batch_size, args.n_workers, False)
     spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, args.lr)
     spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
         args.n_epochs, args.early_stop_ratio)
