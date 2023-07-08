@@ -15,6 +15,7 @@ def main(args):
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
+    vae.eval()
     x, y, e = data_train.dataset[:]
     n_classes = int(y.max() + 1)
     n_envs = int(e.max() + 1)

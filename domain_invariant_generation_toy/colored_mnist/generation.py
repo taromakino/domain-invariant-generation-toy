@@ -17,6 +17,7 @@ def main(args):
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
+    vae.eval()
     spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
     x, y, e = data_train.dataset[:]
@@ -68,5 +69,5 @@ if __name__ == '__main__':
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
     parser.add_argument('--n_steps_per_col', type=int, default=1000)
-    parser.add_argument('--lr', type=float, default=0.1)
+    parser.add_argument('--lr', type=float, default=1)
     main(parser.parse_args())

@@ -20,10 +20,13 @@ class VAE(pl.LightningModule):
         self.image_encoder = nn.Sequential(
             nn.Conv2d(2, 32, 4, 2, 1),
             nn.ReLU(),
+            nn.BatchNorm2d(32),
             nn.Conv2d(32, 128, 4, 2, 1),
             nn.ReLU(),
+            nn.BatchNorm2d(128),
             nn.Conv2d(128, 512, 7, 1, 0),
             nn.ReLU(),
+            nn.BatchNorm2d(512),
             nn.Conv2d(512, 100, 1, 1, 0),
         )
         self.encoder_mu = MLP(100, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
@@ -34,8 +37,10 @@ class VAE(pl.LightningModule):
             nn.ReLU(),
             nn.ConvTranspose2d(512, 128, 7, 1, 0),
             nn.ReLU(),
+            nn.BatchNorm2d(128),
             nn.ConvTranspose2d(128, 32, 4, 2, 1),
             nn.ReLU(),
+            nn.BatchNorm2d(32),
             nn.ConvTranspose2d(32, 2, 4, 2, 1)
         )
         # p(y|z_c)
