@@ -19,15 +19,16 @@ def main(args):
     x, y, e = data_train.dataset[:]
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    posterior_dist_causal = vae.posterior_dist_causal(x, y_idx, e_idx)
-    posterior_dist_spurious = vae.posterior_dist_spurious(x, y_idx, e_idx)
+    x_embed = vae.image_encoder(x).flatten(start_dim=1)
+    posterior_dist_causal = vae.posterior_dist_causal(x_embed, y_idx, e_idx)
+    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed, y_idx, e_idx)
     z_c = posterior_dist_causal.loc
     z_s = posterior_dist_spurious.loc
     z = torch.cat((z_c, z_s), dim=1)
-    x_pred = torch.sigmoid(vae.decoder(z))
+    x_pred = torch.sigmoid(vae.decoder(z[:, :, None, None]))
     fig, axes = plt.subplots(1, 2)
-    plot_red_green_image(axes[0], x[0].reshape((2, 14, 14)).detach().numpy())
-    plot_red_green_image(axes[1], x_pred[0].reshape((2, 14, 14)).detach().numpy())
+    plot_red_green_image(axes[0], x[0].detach().numpy())
+    plot_red_green_image(axes[1], x_pred[0].detach().numpy())
     plt.show(block=True)
 
 
