@@ -77,6 +77,7 @@ class VAE(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         z = torch.cat((z_c, z_s), dim=1)
         x_pred = self.decoder(z[:, :, None, None]).flatten(start_dim=1)
+        x = x.flatten(start_dim=1)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # E_q(z_c|x,y,e)[log p(y|z_c)]
         y_pred = self.causal_classifier(z_c)

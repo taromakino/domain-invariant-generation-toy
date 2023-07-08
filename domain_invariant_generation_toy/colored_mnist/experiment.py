@@ -7,12 +7,13 @@ from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
 
-def make_spurious_data(data, model, batch_size, n_workers, is_train):
+def make_spurious_data(data, vae, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
-    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
+    x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    posterior_dist_spurious = model.posterior_dist_spurious(x, y_idx, e_idx)
+    x_embed = vae.image_encoder(x).flatten(start_dim=1)
+    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed, y_idx, e_idx)
     z_s = posterior_dist_spurious.loc
     return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
@@ -24,7 +25,7 @@ def main(args):
     _, y, e = data_train.dataset[:]
     n_classes = int(y.max() + 1)
     n_envs = int(e.max() + 1)
-    vae = VAE(2 * 14 * 14, args.z_size, args.h_sizes, n_classes, n_envs, args.lr)
+    vae = VAE(args.z_size, args.h_sizes, n_classes, n_envs, args.lr)
     vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
