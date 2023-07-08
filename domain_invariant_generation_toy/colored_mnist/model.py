@@ -8,7 +8,7 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
+    def __init__(self, z_size, h_sizes, n_classes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
@@ -17,10 +17,27 @@ class VAE(pl.LightningModule):
         self.n_envs = n_envs
         self.half_z_size = z_size // 2
         # q(z_c,z_s|x,y,e)
-        self.encoder_mu = MLP(x_size, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
-        self.encoder_cov = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(z_size), nn.ReLU)
+        self.image_encoder = nn.Sequential(
+            nn.Conv2d(2, 32, 4, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, 7, 1, 0),
+            nn.ReLU(),
+            nn.Conv2d(128, 50, 1, 1, 0),
+        )
+        self.encoder_mu = MLP(50, h_sizes, n_classes * n_envs * z_size, nn.ReLU)
+        self.encoder_cov = MLP(50, h_sizes, n_classes * n_envs * size_to_n_tril(z_size), nn.ReLU)
         # p(x|z_c, z_s)
-        self.decoder = MLP(z_size, h_sizes, x_size, nn.ReLU)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(z_size, 128, 1, 1, 0),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128, 64, 7, 1, 0),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 2, 4, 2, 1)
+        )
         # p(y|z_c)
         self.causal_classifier = MLP(self.half_z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
@@ -44,13 +61,17 @@ class VAE(pl.LightningModule):
         y_idx = y.squeeze().int()
         e_idx = e.squeeze().int()
         # z_c, z_s ~ q(z_c,z_s|x,y,e)
-        posterior_mu = self.encoder_mu(x).reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
+        image_embedding = self.image_encoder(x).flatten(start_dim=1)
+        posterior_mu = self.encoder_mu(image_embedding)
+        posterior_mu = posterior_mu.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
         posterior_mu = posterior_mu[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_cov = self.encoder_cov(x).reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
+        posterior_cov = self.encoder_cov(image_embedding)
+        posterior_cov = posterior_cov.reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
         posterior_cov = arr_to_scale_tril(posterior_cov[torch.arange(batch_size), y_idx, e_idx, :])
         z = self.sample_z(posterior_mu, posterior_cov)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-        x_pred = self.decoder(z)
+        x_pred = self.decoder(z[:, :, None, None]).flatten(start_dim=1)
+        x = x.flatten(start_dim=1)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # E_q(z_c,z_s|x,y,e)[log p(y|z_c)]
         z_c, z_s = torch.chunk(z, 2, dim=1)
