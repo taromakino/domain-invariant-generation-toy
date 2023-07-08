@@ -33,7 +33,7 @@ def main(args):
     model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     zs_y_data_train = make_spurious_data(data_train, model, n_classes, n_envs, args.batch_size, args.n_workers, True)
     zs_y_data_val = make_spurious_data(data_val, model, n_classes, n_envs, args.batch_size, args.n_workers, False)
-    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, args.lr)
+    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, n_envs, args.lr)
     spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
         args.n_epochs, args.early_stop_ratio)
     spurious_classifier_trainer.fit(spurious_classifier, zs_y_data_train, zs_y_data_val)
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--z_size', type=int, default=20)
-    parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
+    parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)

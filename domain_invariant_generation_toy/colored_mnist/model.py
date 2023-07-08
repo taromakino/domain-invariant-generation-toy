@@ -97,17 +97,18 @@ class VAE(pl.LightningModule):
 
 
 class SpuriousClassifier(pl.LightningModule):
-    def __init__(self, z_size, h_sizes, lr):
+    def __init__(self, z_size, h_sizes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
+        self.n_envs = n_envs
         self.lr = lr
         # p(y|z_s, e)
-        self.net = MLP(z_size // 2, h_sizes, 2, nn.ReLU)
+        self.net = MLP(z_size // 2, h_sizes, n_envs, nn.ReLU)
 
     def forward(self, z_s, y, e):
         batch_size = len(z_s)
         e_idx = e.squeeze().int()
-        y_pred = self.net(z_s).reshape(batch_size, 2, 1)
+        y_pred = self.net(z_s).reshape(batch_size, self.n_envs, 1)
         y_pred = y_pred[torch.arange(batch_size), e_idx]
         return F.binary_cross_entropy_with_logits(y_pred, y)
 
