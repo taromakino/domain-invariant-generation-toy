@@ -5,7 +5,8 @@ import torch
 import torch.nn.functional as F
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, SpuriousClassifier
+from colored_mnist.model import VAE
+from torch.distributions import MultivariateNormal
 from utils.file import load_file
 from utils.plot import plot_red_green_image
 
@@ -16,9 +17,7 @@ def main(args):
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
-    spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
-        f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
-    x, y, e = data_train.dataset[:]
+    x, y, e = data_val.dataset[:]
     ye_idx = (y + 2 * e).squeeze().int()
     n_examples = len(x)
     z = vae.encoder_mu(x).reshape(n_examples, 2 * 2, vae.z_size)
@@ -37,11 +36,15 @@ def main(args):
     zs_perturb = zs_seed.clone().requires_grad_(True)
     for col_idx in range(1, args.n_cols):
         for _ in range(args.n_steps_per_col):
+            # Perturb z_c
             y_pred_causal = vae.causal_classifier(zc_perturb)
             loss_causal = F.binary_cross_entropy_with_logits(y_pred_causal, 1 - y_seed)
             grad_causal = torch.autograd.grad(loss_causal, zc_perturb)[0]
             zc_perturb = zc_perturb - args.eta * grad_causal
-            loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
+            # Perturb z_s
+            prior_mu_spurious, prior_cov_spurious = vae.prior_spurious_params(((1 - y_seed) + 2 * e_seed)[0].int())
+            prior_spurious_dist = MultivariateNormal(prior_mu_spurious, prior_cov_spurious)
+            loss_spurious = -prior_spurious_dist.log_prob(zs_perturb)
             grad_spurious = torch.autograd.grad(loss_spurious, zs_perturb)[0]
             zs_perturb = zs_perturb - args.eta * grad_spurious
         x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed)))
@@ -57,6 +60,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=10000)
-    parser.add_argument('--eta', type=float, default=10)
+    parser.add_argument('--n_steps_per_col', type=int, default=1000)
+    parser.add_argument('--eta', type=float, default=0.01)
     main(parser.parse_args())

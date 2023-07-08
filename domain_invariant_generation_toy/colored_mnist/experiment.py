@@ -1,22 +1,10 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, SpuriousClassifier
+from colored_mnist.model import VAE
 from utils.file import save_file
-from utils.nn_utils import make_dataloader, make_trainer
-
-
-def make_spurious_data(data, model, batch_size, n_workers, is_train):
-    x, y, e = data.dataset[:]
-    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
-    ye_idx = (y + 2 * e).squeeze().int()
-    n_examples = len(x)
-    z = model.encoder_mu(x).reshape(n_examples, 2 * 2, model.z_size)
-    z = z[torch.arange(n_examples), ye_idx, :]
-    z_c, z_s = torch.chunk(z, 2, dim=1)
-    return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
+from utils.nn_utils import make_trainer
 
 
 def main(args):
@@ -24,15 +12,8 @@ def main(args):
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
     model = VAE(2 * 14 * 14, args.z_size, args.h_sizes, args.lr)
-    model_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
-    model_trainer.fit(model, data_train, data_val)
-    model = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    zs_y_data_train = make_spurious_data(data_train, model, args.batch_size, args.n_workers, True)
-    zs_y_data_val = make_spurious_data(data_val, model, args.batch_size, args.n_workers, False)
-    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, args.lr)
-    spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
-        args.n_epochs, args.early_stop_ratio)
-    spurious_classifier_trainer.fit(spurious_classifier, zs_y_data_train, zs_y_data_val)
+    trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
+    trainer.fit(model, data_train, data_val)
 
 
 if __name__ == '__main__':
