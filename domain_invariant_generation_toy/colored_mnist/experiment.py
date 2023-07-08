@@ -1,6 +1,5 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
 from colored_mnist.model import VAE, SpuriousClassifier

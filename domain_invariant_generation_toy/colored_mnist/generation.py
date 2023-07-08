@@ -23,10 +23,8 @@ def main(args):
     x, y, e = data_train.dataset[:]
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    n_examples = len(x)
-    image_embedding = vae.image_encoder(x).flatten(start_dim=1)
-    posterior_dist_causal = vae.posterior_dist_causal(image_embedding, y_idx, e_idx)
-    posterior_dist_spurious = vae.posterior_dist_spurious(image_embedding, y_idx, e_idx)
+    posterior_dist_causal = vae.posterior_dist_causal(x, y_idx, e_idx)
+    posterior_dist_spurious = vae.posterior_dist_spurious(x, y_idx, e_idx)
     z_c = posterior_dist_causal.loc
     z_s = posterior_dist_spurious.loc
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
@@ -39,8 +37,8 @@ def main(args):
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
-    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
-    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 14, 14)).detach().numpy())
+    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 14, 14)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
     zc_optim = Adam([zc_perturb], lr=args.lr)
@@ -56,10 +54,10 @@ def main(args):
             loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
             loss_spurious.backward()
             zs_optim.step()
-        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None])
-        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None])
-        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
-        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
+        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed)))
+        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb)))
+        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 14, 14)).detach().numpy())
+        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 14, 14)).detach().numpy())
     plt.show(block=True)
 
 
