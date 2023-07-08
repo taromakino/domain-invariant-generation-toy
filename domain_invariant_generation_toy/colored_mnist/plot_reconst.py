@@ -17,15 +17,14 @@ def main(args):
         map_location='cpu')
     vae.eval()
     x, y, e = data_train.dataset[:]
-    n_classes = int(y.max() + 1)
-    n_envs = int(e.max() + 1)
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    n_examples = len(x)
     image_embedding = vae.image_encoder(x).flatten(start_dim=1)
-    z = vae.encoder_mu(image_embedding)
-    z = z.reshape(n_examples, n_classes, n_envs, vae.z_size)
-    z = z[torch.arange(n_examples), y_idx, e_idx, :]
+    posterior_dist_causal = vae.posterior_dist_causal(image_embedding, y_idx, e_idx)
+    posterior_dist_spurious = vae.posterior_dist_spurious(image_embedding, y_idx, e_idx)
+    z_c = posterior_dist_causal.loc
+    z_s = posterior_dist_spurious.loc
+    z = torch.cat((z_c, z_s))
     x_pred = torch.sigmoid(vae.decoder(z[:, :, None, None]))
     fig, axes = plt.subplots(1, 2)
     plot_red_green_image(axes[0], x[0].reshape((2, 28, 28)).detach().numpy())

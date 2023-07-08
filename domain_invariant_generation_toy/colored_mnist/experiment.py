@@ -15,10 +15,9 @@ def make_spurious_data(data, model, n_classes, n_envs, batch_size, n_workers, is
     e_idx = e.squeeze().int()
     n_examples = len(x)
     image_embedding = model.image_encoder(x).flatten(start_dim=1)
-    z = model.encoder_mu(image_embedding)
-    z = z.reshape(n_examples, n_classes, n_envs, model.z_size)
-    z = z[torch.arange(n_examples), y_idx, e_idx, :]
-    z_c, z_s = torch.chunk(z, 2, dim=1)
+    z_s = model.encoder_mu_spurious(image_embedding)
+    z_s = z_s.reshape(n_examples, n_classes, n_envs, model.z_size)
+    z_s = z_s[torch.arange(n_examples), y_idx, e_idx, :]
     return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
 
@@ -46,7 +45,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--z_size', type=int, default=20)
+    parser.add_argument('--z_size', type=int, default=10)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[256, 256])
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
