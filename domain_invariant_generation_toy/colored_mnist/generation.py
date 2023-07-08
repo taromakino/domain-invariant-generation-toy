@@ -31,7 +31,7 @@ def main(args):
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     # Generate in the environment where y and color are positively correlated
     assert torch.allclose(e_seed, torch.tensor([0.]))
-    x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
+    y_seed, e_seed = y_seed[None], e_seed[None]
     zc_seed = z_c[args.example_idx][None]
     zs_seed = z_s[args.example_idx][None]
     fig, axes = plt.subplots(2, args.n_cols)
@@ -55,8 +55,8 @@ def main(args):
             loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
             loss_spurious.backward()
             zs_optim.step()
-        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None])
-        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None])
+        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None]).squeeze()
+        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None]).squeeze()
         plot_red_green_image(axes[0, col_idx], x_pred_causal.detach().numpy())
         plot_red_green_image(axes[1, col_idx], x_pred_spurious.detach().numpy())
     plt.show(block=True)

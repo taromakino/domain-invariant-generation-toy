@@ -29,8 +29,8 @@ def make_environment(images, labels, e_prob):
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
-    binary_idxs = np.where(mnist.targets <= 1)
-    images, binary_digits = mnist.data[binary_idxs], mnist.targets[binary_idxs].float()
+    images, digits = mnist.data, mnist.targets.float()
+    binary_digits = (digits < 5).float()
     envs = [
         make_environment(images[::2], binary_digits[::2], 0.1),
         make_environment(images[1::2], binary_digits[1::2], 0.9)
