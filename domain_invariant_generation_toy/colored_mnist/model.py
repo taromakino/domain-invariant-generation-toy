@@ -20,8 +20,6 @@ class VAE(pl.LightningModule):
         self.encoder_cov = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
-        # p(y|z_c)
-        self.causal_classifier = MLP(self.z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
         self.prior_cov_causal = nn.Parameter(torch.zeros(n_envs, size_to_n_tril(self.z_size)))
@@ -50,9 +48,6 @@ class VAE(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
-        # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.causal_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_mu_causal, prior_cov_causal = self.prior_params_causal(e_idx)
         prior_mu_spurious, prior_cov_spurious = self.prior_params_spurious(y_idx, e_idx)
@@ -62,7 +57,7 @@ class VAE(pl.LightningModule):
         prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
         kl = D.kl_divergence(posterior_dist, prior_dist)
-        elbo = log_prob_x_z + log_prob_y_zc - kl
+        elbo = log_prob_x_z - kl
         return -elbo.mean()
 
     def posterior_dist(self, x, y_idx, e_idx):
@@ -102,19 +97,18 @@ class VAE(pl.LightningModule):
         return Adam(self.parameters(), lr=self.lr)
 
 
-class SpuriousClassifier(pl.LightningModule):
+class Classifier(pl.LightningModule):
     def __init__(self, z_size, h_sizes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.n_envs = n_envs
         self.lr = lr
-        # p(y|z_s, e)
         self.net = MLP(z_size, h_sizes, n_envs, nn.ReLU)
 
-    def forward(self, z_s, y, e):
-        batch_size = len(z_s)
+    def forward(self, z_subset, y, e):
+        batch_size = len(z_subset)
         e_idx = e.squeeze().int()
-        y_pred = self.net(z_s).reshape(batch_size, self.n_envs, 1)
+        y_pred = self.net(z_subset).reshape(batch_size, self.n_envs, 1)
         y_pred = y_pred[torch.arange(batch_size), e_idx]
         return F.binary_cross_entropy_with_logits(y_pred, y)
 

@@ -3,12 +3,12 @@ import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, SpuriousClassifier
+from colored_mnist.model import VAE, Classifier
 from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
 
-def make_spurious_data(data, vae, batch_size, n_workers, is_train):
+def make_classify_data(data, vae, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
     x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
     y_idx = y.squeeze().int()
@@ -16,7 +16,9 @@ def make_spurious_data(data, vae, batch_size, n_workers, is_train):
     posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
     z = posterior_dist.loc
     z_c, z_s = torch.chunk(z, 2, dim=1)
-    return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
+    causal_data = make_dataloader((z_c.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
+    spurious_data = make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
+    return causal_data, spurious_data
 
 
 def main(args):
@@ -31,12 +33,16 @@ def main(args):
     vae_trainer.fit(vae, data_train, data_val)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     vae.eval()
-    zs_y_data_train = make_spurious_data(data_train, vae, args.batch_size, args.n_workers, True)
-    zs_y_data_val = make_spurious_data(data_val, vae, args.batch_size, args.n_workers, False)
-    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, n_envs, args.lr)
-    spurious_classifier_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed,
-        args.n_epochs, args.early_stop_ratio)
-    spurious_classifier_trainer.fit(spurious_classifier, zs_y_data_train, zs_y_data_val)
+    causal_data_train, spurious_data_train = make_classify_data(data_train, vae, args.batch_size, args.n_workers, True)
+    causal_data_val, spurious_data_val = make_classify_data(data_val, vae, args.batch_size, args.n_workers, False)
+    causal_classifier = Classifier(args.z_size, args.h_sizes, n_envs, args.lr)
+    spurious_classifier = Classifier(args.z_size, args.h_sizes, n_envs, args.lr)
+    causal_trainer = make_trainer(os.path.join(args.dpath, 'causal_classifier'), args.seed, args.n_epochs,
+        args.early_stop_ratio)
+    spurious_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed, args.n_epochs,
+        args.early_stop_ratio)
+    causal_trainer.fit(causal_classifier, causal_data_train, causal_data_val)
+    spurious_trainer.fit(spurious_classifier, spurious_data_train, spurious_data_val)
 
 
 if __name__ == '__main__':
@@ -44,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--z_size', type=int, default=20)
-    parser.add_argument('--h_sizes', nargs='+', type=int, default=[256, 256])
+    parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)

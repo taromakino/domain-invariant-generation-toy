@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, SpuriousClassifier
+from colored_mnist.model import VAE, Classifier
 from torch.optim import Adam
 from utils.file import load_file
 from utils.plot import plot_red_green_image
@@ -18,7 +18,7 @@ def main(args):
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     vae.eval()
-    spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
+    spurious_classifier = Classifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
     x, y, e = data_train.dataset[:]
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
@@ -34,8 +34,8 @@ def main(args):
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
-    plot_red_green_image(axes[0, 0], x_seed[0].detach().numpy())
-    plot_red_green_image(axes[1, 0], x_seed[0].detach().numpy())
+    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
     zc_optim = Adam([zc_perturb], lr=args.lr)
@@ -53,8 +53,8 @@ def main(args):
             zs_optim.step()
         x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None])
         x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None])
-        plot_red_green_image(axes[0, col_idx], x_pred_causal[0].detach().numpy())
-        plot_red_green_image(axes[1, col_idx], x_pred_spurious[0].detach().numpy())
+        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
+        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
 
 
