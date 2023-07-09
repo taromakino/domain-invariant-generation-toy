@@ -19,13 +19,13 @@ class VAE(pl.LightningModule):
             nn.Conv2d(2, 32, 4, 2, 1),
             nn.ReLU(),
             nn.BatchNorm2d(32),
-            nn.Conv2d(32, 128, 4, 2, 1),
+            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.Conv2d(64, 128, 7, 1, 0),
             nn.ReLU(),
             nn.BatchNorm2d(128),
-            nn.Conv2d(128, 512, 7, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(512),
-            nn.Conv2d(512, 100, 1, 1, 0),
+            nn.Conv2d(128, 100, 1, 1, 0),
         )
         # q(z_c|x,y,e)
         self.encoder_mu_causal = MLP(100, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
@@ -35,12 +35,13 @@ class VAE(pl.LightningModule):
         self.encoder_cov_spurious = MLP(100, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(2 * z_size, 512, 1, 1, 0),
-            nn.ReLU(),
-            nn.ConvTranspose2d(512, 128, 7, 1, 0),
+            nn.ConvTranspose2d(2 * z_size, 128, 1, 1, 0),
             nn.ReLU(),
             nn.BatchNorm2d(128),
-            nn.ConvTranspose2d(128, 32, 4, 2, 1),
+            nn.ConvTranspose2d(128, 64, 7, 1, 0),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),
             nn.ReLU(),
             nn.BatchNorm2d(32),
             nn.ConvTranspose2d(32, 2, 4, 2, 1)
