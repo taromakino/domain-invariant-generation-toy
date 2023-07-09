@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, Classifier
+from colored_mnist.model import VAE, CausalClassifier, SpuriousClassifier
 from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
 
@@ -16,7 +16,7 @@ def make_classify_data(data, vae, batch_size, n_workers, is_train):
     posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
     z = posterior_dist.loc
     z_c, z_s = torch.chunk(z, 2, dim=1)
-    causal_data = make_dataloader((z_c.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
+    causal_data = make_dataloader((z_c.detach().cpu(), y.cpu()), batch_size, n_workers, is_train)
     spurious_data = make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
     return causal_data, spurious_data
 
@@ -35,8 +35,9 @@ def main(args):
     vae.eval()
     causal_data_train, spurious_data_train = make_classify_data(data_train, vae, args.batch_size, args.n_workers, True)
     causal_data_val, spurious_data_val = make_classify_data(data_val, vae, args.batch_size, args.n_workers, False)
-    causal_classifier = Classifier(args.z_size, args.h_sizes, n_envs, args.lr)
-    spurious_classifier = Classifier(args.z_size, args.h_sizes, n_envs, args.lr)
+    causal_classifier = CausalClassifier(args.z_size, args.h_sizes, args.lr)
+    causal_classifier.net.load_state_dict(vae.causal_classifier.state_dict())
+    spurious_classifier = SpuriousClassifier(args.z_size, args.h_sizes, n_envs, args.lr)
     causal_trainer = make_trainer(os.path.join(args.dpath, 'causal_classifier'), args.seed, args.n_epochs,
         args.early_stop_ratio)
     spurious_trainer = make_trainer(os.path.join(args.dpath, 'spurious_classifier'), args.seed, args.n_epochs,

@@ -25,7 +25,7 @@ def main(args):
     z_seed = posterior_dist.loc.detach()
     x_pred_seed = torch.sigmoid(vae.decoder(z_seed))
     fig, axes = plt.subplots(1, 2)
-    plot_red_green_image(axes[0], x.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[0], x_seed.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1], x_pred_seed.reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
 
