@@ -1,5 +1,6 @@
 import os
 import pytorch_lightning as pl
+import torch
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
 from colored_mnist.model import VAE, SpuriousClassifier
@@ -12,9 +13,9 @@ def make_spurious_data(data, vae, batch_size, n_workers, is_train):
     x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    x_embed = vae.image_encoder(x).flatten(start_dim=1)
-    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed, y_idx, e_idx)
-    z_s = posterior_dist_spurious.loc
+    posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
+    z = posterior_dist.loc
+    z_c, z_s = torch.chunk(z, 2, dim=1)
     return make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
 
 

@@ -22,7 +22,7 @@ def main(args):
     y_idx_seed = y_seed.squeeze().int()
     e_idx_seed = e_seed.squeeze().int()
     x_embed_seed = vae.image_encoder(x_seed).flatten(start_dim=1)
-    posterior_dist_causal = vae.posterior_dist_causal(x_embed_seed, y_idx_seed, e_idx_seed)
+    posterior_dist_causal = vae.posterior_dist(x_embed_seed, y_idx_seed, e_idx_seed)
     posterior_dist_spurious = vae.posterior_dist_spurious(x_embed_seed, y_idx_seed, e_idx_seed)
     zc_seed = posterior_dist_causal.loc.detach()
     zs_seed = posterior_dist_spurious.loc.detach()
