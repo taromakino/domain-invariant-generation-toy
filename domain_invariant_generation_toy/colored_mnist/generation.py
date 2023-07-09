@@ -21,25 +21,23 @@ def main(args):
     spurious_classifier = SpuriousClassifier.load_from_checkpoint(os.path.join(args.dpath, 'spurious_classifier',
         f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
     x, y, e = data_train.dataset[:]
-    y_idx = y.squeeze().int()
-    e_idx = e.squeeze().int()
-    x_embed = vae.image_encoder(x).flatten(start_dim=1)
-    posterior_dist_causal = vae.posterior_dist_causal(x_embed, y_idx, e_idx)
-    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed, y_idx, e_idx)
-    z_c = posterior_dist_causal.loc.detach()
-    z_s = posterior_dist_spurious.loc.detach()
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     # Generate in the environment where y and color are positively correlated
     assert torch.allclose(e_seed, torch.tensor([0.]))
-    y_seed, e_seed = y_seed[None], e_seed[None]
-    zc_seed = z_c[args.example_idx][None]
-    zs_seed = z_s[args.example_idx][None]
+    x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
+    y_idx_seed = y_seed.squeeze().int()
+    e_idx_seed = e_seed.squeeze().int()
+    x_embed_seed = vae.image_encoder(x_seed).flatten(start_dim=1)
+    posterior_dist_causal = vae.posterior_dist_causal(x_embed_seed, y_idx_seed, e_idx_seed)
+    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed_seed, y_idx_seed, e_idx_seed)
+    zc_seed = posterior_dist_causal.loc.detach()
+    zs_seed = posterior_dist_spurious.loc.detach()
     fig, axes = plt.subplots(2, args.n_cols)
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
-    plot_red_green_image(axes[0, 0], x_seed.detach().numpy())
-    plot_red_green_image(axes[1, 0], x_seed.detach().numpy())
+    plot_red_green_image(axes[0, 0], x_seed[0].detach().numpy())
+    plot_red_green_image(axes[1, 0], x_seed[0].detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
     zc_optim = Adam([zc_perturb], lr=args.lr)
@@ -55,10 +53,10 @@ def main(args):
             loss_spurious = spurious_classifier(zs_perturb, 1 - y_seed, e_seed)
             loss_spurious.backward()
             zs_optim.step()
-        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None]).squeeze()
-        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None]).squeeze()
-        plot_red_green_image(axes[0, col_idx], x_pred_causal.detach().numpy())
-        plot_red_green_image(axes[1, col_idx], x_pred_spurious.detach().numpy())
+        x_pred_causal = vae.decoder(torch.hstack((zc_perturb, zs_seed))[:, :, None, None])
+        x_pred_spurious = vae.decoder(torch.hstack((zc_seed, zs_perturb))[:, :, None, None])
+        plot_red_green_image(axes[0, col_idx], x_pred_causal[0].detach().numpy())
+        plot_red_green_image(axes[1, col_idx], x_pred_spurious[0].detach().numpy())
     plt.show(block=True)
 
 
