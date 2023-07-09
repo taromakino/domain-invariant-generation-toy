@@ -8,41 +8,18 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, z_size, h_sizes, n_classes, n_envs, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.z_size = z_size
-        self.image_encoder = nn.Sequential(
-            nn.Conv2d(2, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.Conv2d(32, 64, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(64),
-            nn.Conv2d(64, 128, 7, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.Conv2d(128, 100, 1, 1, 0),
-        )
         # q(z_c|x,y,e)
-        self.encoder_mu = MLP(100, h_sizes, n_classes * n_envs * 2 * self.z_size, nn.ReLU)
-        self.encoder_cov = MLP(100, h_sizes, n_classes * n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
+        self.encoder_mu = MLP(x_size, h_sizes, n_classes * n_envs * 2 * self.z_size, nn.ReLU)
+        self.encoder_cov = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(2 * z_size, 128, 1, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.ConvTranspose2d(128, 64, 7, 1, 0),
-            nn.ReLU(),
-            nn.BatchNorm2d(64),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.ConvTranspose2d(32, 2, 4, 2, 1)
-        )
+        self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
         # p(y|z_c)
         self.causal_classifier = MLP(self.z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
@@ -71,8 +48,7 @@ class VAE(pl.LightningModule):
         z = self.sample_z(posterior_dist)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-        x_pred = self.decoder(z[:, :, None, None]).flatten(start_dim=1)
-        x = x.flatten(start_dim=1)
+        x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # E_q(z_c|x,y,e)[log p(y|z_c)]
         y_pred = self.causal_classifier(z_c)
@@ -91,11 +67,10 @@ class VAE(pl.LightningModule):
 
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
-        x_embed = self.image_encoder(x).flatten(start_dim=1)
-        posterior_mu_causal = self.encoder_mu(x_embed)
+        posterior_mu_causal = self.encoder_mu(x)
         posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_classes, self.n_envs, 2 * self.z_size)
         posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_cov_causal = self.encoder_cov(x_embed)
+        posterior_cov_causal = self.encoder_cov(x)
         posterior_cov_causal = posterior_cov_causal.reshape(batch_size, self.n_classes, self.n_envs,
             size_to_n_tril(2 * self.z_size))
         posterior_cov_causal = arr_to_scale_tril(posterior_cov_causal[torch.arange(batch_size), y_idx, e_idx, :])
