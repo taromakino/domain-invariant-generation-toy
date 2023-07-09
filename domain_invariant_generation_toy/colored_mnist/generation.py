@@ -27,11 +27,9 @@ def main(args):
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
     y_idx_seed = y_seed.squeeze().int()
     e_idx_seed = e_seed.squeeze().int()
-    x_embed_seed = vae.image_encoder(x_seed).flatten(start_dim=1)
-    posterior_dist_causal = vae.posterior_dist(x_embed_seed, y_idx_seed, e_idx_seed)
-    posterior_dist_spurious = vae.posterior_dist_spurious(x_embed_seed, y_idx_seed, e_idx_seed)
-    zc_seed = posterior_dist_causal.loc.detach()
-    zs_seed = posterior_dist_spurious.loc.detach()
+    posterior_dist = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
+    z_seed = posterior_dist.loc.detach()
+    zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     fig, axes = plt.subplots(2, args.n_cols)
     for ax in axes.flatten():
         ax.set_xticks([])
@@ -67,5 +65,5 @@ if __name__ == '__main__':
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
     parser.add_argument('--n_steps_per_col', type=int, default=5000)
-    parser.add_argument('--lr', type=float, default=1)
+    parser.add_argument('--lr', type=float, default=0.1)
     main(parser.parse_args())
