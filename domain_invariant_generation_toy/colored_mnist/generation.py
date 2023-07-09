@@ -65,5 +65,5 @@ if __name__ == '__main__':
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
     parser.add_argument('--n_steps_per_col', type=int, default=5000)
-    parser.add_argument('--lr', type=float, default=0.1)
+    parser.add_argument('--lr', type=float, default=1)
     main(parser.parse_args())
