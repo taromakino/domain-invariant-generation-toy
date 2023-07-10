@@ -2,7 +2,7 @@ import os
 import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
-from colored_mnist.data import make_data
+from dsprites.data import make_data
 from colored_mnist.model import VAE, CausalPredictor, SpuriousPredictor
 from utils.file import save_file
 from utils.nn_utils import make_dataloader, make_trainer
@@ -28,10 +28,10 @@ def main(args):
     _, y, e = data_train.dataset[:]
     n_classes = int(y.max() + 1)
     n_envs = int(e.max() + 1)
-    vae = VAE(2 * 28 * 28, args.z_size, args.h_sizes, n_classes, n_envs, args.lr)
+    vae = VAE(64 * 64, args.z_size, args.h_sizes, n_classes, n_envs, args.lr)
     vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
-    vae_trainer.fit(vae, data_train, data_val)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    # vae_trainer.fit(vae, data_train, data_val)
+    # vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     vae.eval()
     causal_data_train, spurious_data_train = make_classify_data(data_train, vae, args.batch_size, args.n_workers, True)
     causal_data_val, spurious_data_val = make_classify_data(data_val, vae, args.batch_size, args.n_workers, False)
