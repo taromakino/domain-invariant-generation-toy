@@ -65,12 +65,12 @@ class VAE(pl.LightningModule):
         batch_size = len(x)
         xy = torch.cat((x, y), dim=1)
         posterior_mu_causal = self.encoder_mu(xy)
-        posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_classes, self.n_envs, 2 * self.z_size)
-        posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), y, e_idx, :]
+        posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_envs, 2 * self.z_size)
+        posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), e_idx, :]
         posterior_cov_tril_causal = self.encoder_cov_tril(xy)
-        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_classes, self.n_envs,
+        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_envs,
             size_to_n_tril(2 * self.z_size))
-        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), y, e_idx, :])
+        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
         return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_tril_causal)
 
     def prior_params_causal(self, e_idx):
