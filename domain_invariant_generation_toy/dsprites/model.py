@@ -88,7 +88,7 @@ class VAE(pl.LightningModule):
         prior_cov_tril_spurious = prior_cov_tril_spurious.reshape(batch_size, self.n_envs, size_to_n_tril(self.z_size))
         prior_cov_tril_spurious = arr_to_scale_tril(prior_cov_tril_spurious[torch.arange(batch_size), e_idx, :])
         prior_cov_spurious = torch.bmm(prior_cov_tril_spurious, torch.transpose(prior_cov_tril_spurious, 1, 2))
-        return prior_mu_spurious, prior_cov_tril_spurious
+        return prior_mu_spurious, prior_cov_spurious
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)
