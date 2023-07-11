@@ -61,5 +61,4 @@ if __name__ == '__main__':
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     parser.add_argument('--n_workers', type=int, default=10)
     args = parser.parse_args()
-    assert args.z_size % 2 == 0
     main(args)
