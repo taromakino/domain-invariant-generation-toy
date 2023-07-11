@@ -28,21 +28,18 @@ def make_data(train_ratio, batch_size, n_workers):
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
     n_total = len(images)
-    zero_idxs = np.where(digits == 0)[0]
-    one_idxs = np.where(digits == 1)[0]
-    env0_idxs = []
-    env0_idxs.append(rng.choice(zero_idxs, int(0.75 * len(zero_idxs)), replace=False))
-    env0_idxs.append(rng.choice(one_idxs, int(0.25 * len(one_idxs)), replace=False))
-    env0_idxs = np.concatenate(env0_idxs)
-    env1_idxs = np.setdiff1d(np.arange(n_total), env0_idxs)
-    digits_env0, y_env0, colors_env0, images_env0 = make_environment(rng, images[env0_idxs], digits[env0_idxs], 0.1)
-    digits_env1, y_env1, colors_env1, images_env1 = make_environment(rng, images[env1_idxs], digits[env1_idxs], 0.9)
+    idxs = np.arange(n_total)
+    rng.shuffle(idxs)
+    idxs_0 = idxs[:int(n_total / 2)]
+    idxs_1 = idxs[int(n_total / 2):]
+    digits_0, y_0, colors_0, images_0 = make_environment(rng, images[idxs_0], digits[idxs_0], 0.1)
+    digits_1, y_1, colors_1, images_1 = make_environment(rng, images[idxs_1], digits[idxs_1], 0.9)
     e = torch.zeros(n_total)[:, None]
-    e[env1_idxs] = 1
-    digits = torch.cat((digits_env0, digits_env1))[:, None].float()
-    y = torch.cat((y_env0, y_env1))[:, None].float()
-    colors = torch.cat((colors_env0, colors_env1))[:, None].float()
-    images = torch.cat((images_env0, images_env1))
+    e[idxs_1] = 1
+    digits = torch.cat((digits_0, digits_1))[:, None].float()
+    y = torch.cat((y_0, y_1))[:, None].float()
+    colors = torch.cat((colors_0, colors_1))[:, None].float()
+    images = torch.cat((images_0, images_1))
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
