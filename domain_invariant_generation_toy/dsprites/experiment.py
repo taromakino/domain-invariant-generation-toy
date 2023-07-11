@@ -11,9 +11,8 @@ from utils.nn_utils import make_dataloader, make_trainer
 def make_classify_data(data, vae, batch_size, n_workers, is_train):
     x, y, e = data.dataset[:]
     x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
-    y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
-    posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
+    posterior_dist = vae.posterior_dist(x, y, e_idx)
     z = posterior_dist.loc
     z_c, z_s = torch.chunk(z, 2, dim=1)
     causal_data = make_dataloader((z_c.detach().cpu(), y.cpu()), batch_size, n_workers, is_train)
@@ -22,15 +21,15 @@ def make_classify_data(data, vae, batch_size, n_workers, is_train):
 
 
 def main(args):
-    save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
+    save_file(args, os.path.join(args.dpath, 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
     _, y, e = data_train.dataset[:]
     n_envs = int(e.max() + 1)
     vae = VAE(64 * 64, args.z_size, args.h_sizes, n_envs, args.prior_reg_mult, args.lr)
-    vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
+    vae_trainer = make_trainer(os.path.join(args.dpath, 'vae'), args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, 'vae', f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     vae.eval()
     causal_data_train, spurious_data_train = make_classify_data(data_train, vae, args.batch_size, args.n_workers, True)
     causal_data_val, spurious_data_val = make_classify_data(data_val, vae, args.batch_size, args.n_workers, False)
@@ -49,7 +48,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--z_size', type=int, default=20)
+    parser.add_argument('--z_size', type=int, default=1)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--prior_reg_mult', type=float, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
