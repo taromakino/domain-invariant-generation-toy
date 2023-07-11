@@ -23,7 +23,9 @@ def main(args):
     vae.eval()
     causal_predictor.eval()
     spurious_predictor.eval()
-    x, y, e = data_train.dataset[:]
+    e, digits, y, colors, x = data_train.dataset[:]
+    idxs = (digits == y == colors) and (e == 0)
+    e, digits, y, colors, x = e[idxs], digits[idxs], y[idxs], colors[idxs], x[idxs]
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
     y_idx_seed = y_seed.squeeze().int()

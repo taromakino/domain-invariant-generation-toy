@@ -9,7 +9,8 @@ from utils.nn_utils import make_dataloader, make_trainer
 
 
 def make_classify_data(data, vae, batch_size, n_workers, is_train):
-    x, y, e = data.dataset[:]
+    e, digits, y, colors, images = data.dataset[:]
+    x = images
     x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
     y_idx = y.squeeze().int()
     e_idx = e.squeeze().int()
@@ -25,9 +26,9 @@ def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
-    _, y, e = data_train.dataset[:]
-    n_classes = int(y.max() + 1)
-    n_envs = int(e.max() + 1)
+    e_train, digits_train, y_train, colors_train, x_train = data_train.dataset[:]
+    n_classes = int(y_train.max() + 1)
+    n_envs = int(e_train.max() + 1)
     vae = VAE(2 * 28 * 28, args.z_size, args.h_sizes, n_classes, n_envs, args.prior_reg_mult, args.lr)
     vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)

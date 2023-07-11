@@ -40,7 +40,7 @@ class VAE(pl.LightningModule):
         epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
-    def forward(self, x, y, e):
+    def forward(self, e, digits, y, colors, x):
         batch_size = len(x)
         y_idx = y.squeeze().int()
         e_idx = e.squeeze().int()
