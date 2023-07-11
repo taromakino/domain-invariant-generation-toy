@@ -41,7 +41,6 @@ class VAE(pl.LightningModule):
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
         posterior_dist = self.posterior_dist(x, y_idx, e_idx)
         z = self.sample_z(posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)

@@ -27,15 +27,15 @@ def make_data(train_ratio, batch_size, n_workers):
         factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
         shape = factors['shape'].values
 
-        idxs_e0, idxs_e1 = [], []
+        idxs_env0, idxs_env1 = [], []
         for shape_idx in range(N_SHAPES):
             idxs = np.where(shape == shape_idx + 1)[0]
             idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
             idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
-            idxs_e0.append(idxs_e0_elem)
-            idxs_e1.append(idxs_e1_elem)
-        idxs_e0 = np.concatenate(idxs_e0)
-        idxs_e1 = np.concatenate(idxs_e1)
+            idxs_env0.append(idxs_e0_elem)
+            idxs_env1.append(idxs_e1_elem)
+        idxs_env0 = np.concatenate(idxs_env0)
+        idxs_env1 = np.concatenate(idxs_env1)
 
         n_examples, x_size = x.shape
         # Standardize and add e-invariant noise
@@ -44,18 +44,18 @@ def make_data(train_ratio, batch_size, n_workers):
         y = (area + rng.normal(0, Y_NOISE_SD, len(area))).astype('float32')
         # Add e-dependent noise and scale to [0, 1]
         brightness = np.copy(y)
-        brightness[idxs_e0] += rng.normal(0, BRIGHTNESS_NOISE_SD[0], len(idxs_e0))
-        brightness[idxs_e1] += rng.normal(0, BRIGHTNESS_NOISE_SD[1], len(idxs_e1))
-        brightness[idxs_e0] = min_max_scale(brightness[idxs_e0])
-        brightness[idxs_e1] = min_max_scale(brightness[idxs_e1])
+        brightness[idxs_env0] += rng.normal(0, BRIGHTNESS_NOISE_SD[0], len(idxs_env0))
+        brightness[idxs_env1] += rng.normal(0, BRIGHTNESS_NOISE_SD[1], len(idxs_env1))
+        brightness[idxs_env0] = min_max_scale(brightness[idxs_env0])
+        brightness[idxs_env1] = min_max_scale(brightness[idxs_env1])
 
         brightness = brightness[:, None]
 
-        x[idxs_e0] *= brightness[idxs_e0]
-        x[idxs_e1] *= brightness[idxs_e1]
+        x[idxs_env0] *= brightness[idxs_env0]
+        x[idxs_env1] *= brightness[idxs_env1]
 
         e = np.zeros(n_examples, dtype='float32')
-        e[idxs_e1] = 1
+        e[idxs_env1] = 1
 
         x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
         y, e = y[:, None], e[:, None]

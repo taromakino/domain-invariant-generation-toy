@@ -1,23 +1,10 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from dsprites.data import make_data
-from dsprites.model import VAE, CausalPredictor, SpuriousPredictor
+from dsprites.model import VAE
 from utils.file import save_file
-from utils.nn_utils import make_dataloader, make_trainer
-
-
-def make_classify_data(data, vae, batch_size, n_workers, is_train):
-    x, y, e = data.dataset[:]
-    x, y, e = x.to(vae.device), y.to(vae.device), e.to(vae.device)
-    e_idx = e.squeeze().int()
-    posterior_dist = vae.posterior_dist(x, y, e_idx)
-    z = posterior_dist.loc
-    z_c, z_s = torch.chunk(z, 2, dim=1)
-    causal_data = make_dataloader((z_c.detach().cpu(), y.cpu()), batch_size, n_workers, is_train)
-    spurious_data = make_dataloader((z_s.detach().cpu(), y.cpu(), e.cpu()), batch_size, n_workers, is_train)
-    return causal_data, spurious_data
+from utils.nn_utils import make_trainer
 
 
 def main(args):
@@ -29,19 +16,6 @@ def main(args):
     vae = VAE(64 * 64, args.z_size, args.h_sizes, n_envs, args.prior_reg_mult, args.lr)
     vae_trainer = make_trainer(os.path.join(args.dpath, 'vae'), args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, 'vae', f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    vae.eval()
-    causal_data_train, spurious_data_train = make_classify_data(data_train, vae, args.batch_size, args.n_workers, True)
-    causal_data_val, spurious_data_val = make_classify_data(data_val, vae, args.batch_size, args.n_workers, False)
-    causal_predictor = CausalPredictor(args.z_size, args.h_sizes, args.lr)
-    causal_predictor.net.load_state_dict(vae.causal_predictor.state_dict())
-    spurious_predictor = SpuriousPredictor(args.z_size, args.h_sizes, n_envs, args.lr)
-    causal_trainer = make_trainer(os.path.join(args.dpath, 'causal_predictor'), args.seed, args.n_epochs,
-        args.early_stop_ratio)
-    spurious_trainer = make_trainer(os.path.join(args.dpath, 'spurious_predictor'), args.seed, args.n_epochs,
-        args.early_stop_ratio)
-    causal_trainer.fit(causal_predictor, causal_data_train, causal_data_val)
-    spurious_trainer.fit(spurious_predictor, spurious_data_train, spurious_data_val)
 
 
 if __name__ == '__main__':
