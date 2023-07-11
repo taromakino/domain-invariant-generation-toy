@@ -32,16 +32,20 @@ def main(args):
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     fig, axes = plt.subplots(2, args.n_cols)
+    fig.suptitle(f'y={y_seed.item()}, e={e_seed.item()}')
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
     plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    x_pred = torch.sigmoid(vae.decoder(z_seed))
+    plot_red_green_image(axes[0, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     zc_perturb = zc_seed.clone().requires_grad_(True)
     zs_perturb = zs_seed.clone().requires_grad_(True)
     zc_optim = Adam([zc_perturb], lr=args.lr)
     zs_optim = Adam([zs_perturb], lr=args.lr)
-    for col_idx in range(1, args.n_cols):
+    for col_idx in range(2, args.n_cols):
         for _ in range(args.n_steps_per_col):
             zc_optim.zero_grad()
             loss_causal = causal_predictor(zc_perturb, 1 - y_seed)

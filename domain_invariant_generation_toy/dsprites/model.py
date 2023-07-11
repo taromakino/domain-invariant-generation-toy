@@ -8,9 +8,10 @@ from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_envs, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_envs, prior_reg_mult, lr):
         super().__init__()
         self.save_hyperparameters()
+        self.prior_reg_mult = prior_reg_mult
         self.lr = lr
         self.n_envs = n_envs
         self.z_size = z_size
@@ -23,12 +24,9 @@ class VAE(pl.LightningModule):
         self.causal_predictor = MLP(self.z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
-        self.prior_cov_tril_causal = nn.Parameter(torch.zeros(n_envs, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_causal)
-        nn.init.xavier_normal_(self.prior_cov_tril_causal)
         # p(z_s|y,e)
         self.prior_mu_spurious = MLP(1, h_sizes, n_envs * self.z_size, nn.ReLU)
-        self.prior_cov_tril_spurious = MLP(1, h_sizes, n_envs * size_to_n_tril(self.z_size), nn.ReLU)
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -50,16 +48,16 @@ class VAE(pl.LightningModule):
         y_pred = self.causal_predictor(z_c)
         log_prob_y_zc = -F.mse_loss(y_pred, y, reduction='none')
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
-        prior_mu_causal, prior_cov_causal = self.prior_params_causal(e_idx)
-        prior_mu_spurious, prior_cov_spurious = self.prior_params_spurious(y, e_idx)
+        prior_mu_causal = self.prior_mu_causal[e_idx]
+        prior_mu_spurious = self.prior_mu_spurious(y)
+        prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
+        prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
-        prior_cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=self.device)
-        prior_cov[:, :self.z_size, :self.z_size] = prior_cov_causal
-        prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
+        prior_cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
         kl = D.kl_divergence(posterior_dist, prior_dist)
         elbo = log_prob_x_z + log_prob_y_zc - kl
-        return -elbo.mean()
+        return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_mu)
 
     def posterior_dist(self, x, y, e_idx):
         batch_size = len(x)
@@ -72,23 +70,6 @@ class VAE(pl.LightningModule):
             size_to_n_tril(2 * self.z_size))
         posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
         return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_tril_causal)
-
-    def prior_params_causal(self, e_idx):
-        prior_mu_causal = self.prior_mu_causal[e_idx]
-        prior_cov_tril_causal = arr_to_scale_tril(self.prior_cov_tril_causal[e_idx])
-        prior_cov_causal = torch.bmm(prior_cov_tril_causal, torch.transpose(prior_cov_tril_causal, 1, 2))
-        return prior_mu_causal, prior_cov_causal
-
-    def prior_params_spurious(self, y, e_idx):
-        batch_size = len(y)
-        prior_mu_spurious = self.prior_mu_spurious(y)
-        prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
-        prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]
-        prior_cov_tril_spurious = self.prior_cov_tril_spurious(y)
-        prior_cov_tril_spurious = prior_cov_tril_spurious.reshape(batch_size, self.n_envs, size_to_n_tril(self.z_size))
-        prior_cov_tril_spurious = arr_to_scale_tril(prior_cov_tril_spurious[torch.arange(batch_size), e_idx, :])
-        prior_cov_spurious = torch.bmm(prior_cov_tril_spurious, torch.transpose(prior_cov_tril_spurious, 1, 2))
-        return prior_mu_spurious, prior_cov_spurious
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)
