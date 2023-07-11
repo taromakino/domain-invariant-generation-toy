@@ -20,8 +20,6 @@ class VAE(pl.LightningModule):
         self.encoder_cov_tril = MLP(x_size + 1, h_sizes, n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
-        # p(y|z_c)
-        self.causal_predictor = MLP(self.z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
         nn.init.xavier_normal_(self.prior_mu_causal)
@@ -44,9 +42,6 @@ class VAE(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
-        # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.causal_predictor(z_c)
-        log_prob_y_zc = -F.mse_loss(y_pred, y, reduction='none')
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_mu_causal = self.prior_mu_causal[e_idx]
         prior_mu_spurious = self.prior_mu_spurious(y)
@@ -56,7 +51,7 @@ class VAE(pl.LightningModule):
         prior_cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
         kl = D.kl_divergence(posterior_dist, prior_dist)
-        elbo = log_prob_x_z + log_prob_y_zc - kl
+        elbo = log_prob_x_z - kl
         return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_mu)
 
     def posterior_dist(self, x, y, e_idx):
