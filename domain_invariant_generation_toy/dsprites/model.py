@@ -24,7 +24,8 @@ class VAE(pl.LightningModule):
         self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
         nn.init.xavier_normal_(self.prior_mu_causal)
         # p(z_s|y,e)
-        self.prior_mu_spurious = MLP(1, h_sizes, n_envs * self.z_size, nn.ReLU)
+        self.prior_mu_spurious = nn.Parameter(torch.zeros(n_envs, self.z_size))
+        nn.init.xavier_normal_(self.prior_mu_spurious)
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -38,15 +39,12 @@ class VAE(pl.LightningModule):
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
         posterior_dist = self.posterior_dist(x, y, e_idx)
         z = self.sample_z(posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_mu_causal = self.prior_mu_causal[e_idx]
-        prior_mu_spurious = self.prior_mu_spurious(y)
-        prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
-        prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]
+        prior_mu_spurious = y * self.prior_mu_causal[e_idx]
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
         prior_cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         prior_dist = D.MultivariateNormal(prior_mu, prior_cov)

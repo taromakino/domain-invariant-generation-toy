@@ -44,7 +44,7 @@ def main(args):
     plot_grayscale_image(axes[0, 1], x_pred.reshape((64, 64)).detach().numpy())
     plot_grayscale_image(axes[1, 1], x_pred.reshape((64, 64)).detach().numpy())
     for col_idx in range(2, args.n_cols):
-        alpha = rng.beta(1, 5, 1).item()
+        alpha = rng.random()
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
         zc_perturb = alpha * zc_seed + (1 - alpha) * zc_sample
