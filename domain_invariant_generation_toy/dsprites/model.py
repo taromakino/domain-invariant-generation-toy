@@ -87,7 +87,7 @@ class CausalPredictor(pl.LightningModule):
 
     def forward(self, z_c, y):
         y_pred = self.net(z_c)
-        return F.mse_loss(y_pred, y)
+        return F.binary_cross_entropy_with_logits(y_pred, y)
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)
@@ -116,7 +116,7 @@ class SpuriousPredictor(pl.LightningModule):
         e_idx = e.squeeze().int()
         y_pred = self.net(z_s).reshape(batch_size, self.n_envs, 1)
         y_pred = y_pred[torch.arange(batch_size), e_idx]
-        return F.mse_loss(y_pred, y)
+        return F.binary_cross_entropy_with_logits(y_pred, y)
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)

@@ -28,34 +28,29 @@ def make_data(train_ratio, batch_size, n_workers):
         shape = factors['shape'].values
         n_shapes = int(shape.max())
 
-        idxs_env0, idxs_env1 = [], []
+        idxs_env1 = []
         for shape_idx in range(n_shapes):
             idxs = np.where(shape == shape_idx + 1)[0]
             idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
             idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
-            idxs_env0.append(idxs_e0_elem)
             idxs_env1.append(idxs_e1_elem)
-        idxs_env0 = np.concatenate(idxs_env0)
         idxs_env1 = np.concatenate(idxs_env1)
 
         n_examples, x_size = x.shape
         # Standardize and add e-invariant noise
         area = x.sum(axis=1) / x_size
-        area = (area - area.mean()) / area.std()
+        area = min_max_scale(area)
         # y = area + rng.normal(0, 1, len(area))
         y = area
         # y and brightness are positively correlated in env0, and negatively correlated in env1
-        brightness = np.copy(y)
+        brightness = 2 * np.copy(y) - 1
         brightness[idxs_env1] *= -1
         # brightness += rng.normal(0, 1, len(brightness))
 
-        brightness[idxs_env0] = min_max_scale(brightness[idxs_env0])
-        brightness[idxs_env1] = min_max_scale(brightness[idxs_env1])
-
+        brightness = (brightness + 1) / 2
         brightness = brightness[:, None]
 
-        x[idxs_env0] *= brightness[idxs_env0]
-        x[idxs_env1] *= brightness[idxs_env1]
+        x *= brightness
 
         e = np.zeros(n_examples)
         e[idxs_env1] = 1
