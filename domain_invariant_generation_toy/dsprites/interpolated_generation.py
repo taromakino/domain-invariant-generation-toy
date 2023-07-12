@@ -31,7 +31,7 @@ def main(args):
     prior_cov = torch.eye(prior_mu.shape[1]).expand(1, prior_mu.shape[1], prior_mu.shape[1])
     prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
     fig, axes = plt.subplots(2, args.n_cols)
-    fig.suptitle(f'y={y_seed.item()}, e={e_seed.item()}')
+    fig.suptitle(f'y={y_seed.item():.3f}, e={e_seed.item()}')
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
@@ -41,13 +41,10 @@ def main(args):
     plot_grayscale_image(axes[0, 1], x_pred.reshape((64, 64)).detach().numpy())
     plot_grayscale_image(axes[1, 1], x_pred.reshape((64, 64)).detach().numpy())
     for col_idx in range(2, args.n_cols):
-        alpha = rng.beta(2, 5)
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
-        zc_perturb = alpha * zc_seed + (1 - alpha) * zc_sample
-        zs_perturb = alpha * zs_seed + (1 - alpha) * zs_sample
-        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
-        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_perturb))))
+        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_sample, zs_seed))))
+        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_sample))))
         plot_grayscale_image(axes[0, col_idx], x_pred_causal.reshape((64, 64)).detach().numpy())
         plot_grayscale_image(axes[1, col_idx], x_pred_spurious.reshape((64, 64)).detach().numpy())
     plt.show(block=True)
