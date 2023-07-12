@@ -8,13 +8,13 @@ from utils.nn_utils import make_trainer
 
 
 def main(args):
-    save_file(args, os.path.join(args.dpath, 'args.pkl'))
+    save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
     _, y, e = data_train.dataset[:]
     n_envs = int(e.max() + 1)
     vae = VAE(64 * 64, args.z_size, args.h_sizes, n_envs, args.prior_reg_mult, args.lr)
-    vae_trainer = make_trainer(os.path.join(args.dpath, 'vae'), args.seed, args.n_epochs, args.early_stop_ratio)
+    vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
 
 
