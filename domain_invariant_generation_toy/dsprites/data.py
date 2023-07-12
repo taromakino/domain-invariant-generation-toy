@@ -42,11 +42,12 @@ def make_data(train_ratio, batch_size, n_workers):
         # Standardize and add e-invariant noise
         area = x.sum(axis=1) / x_size
         area = (area - area.mean()) / area.std()
-        y = area + rng.normal(0, 1, len(area))
+        # y = area + rng.normal(0, 1, len(area))
+        y = area
         # y and brightness are positively correlated in env0, and negatively correlated in env1
         brightness = np.copy(y)
         brightness[idxs_env1] *= -1
-        brightness += rng.normal(0, 1, len(brightness))
+        # brightness += rng.normal(0, 1, len(brightness))
 
         brightness[idxs_env0] = min_max_scale(brightness[idxs_env0])
         brightness[idxs_env1] = min_max_scale(brightness[idxs_env1])
