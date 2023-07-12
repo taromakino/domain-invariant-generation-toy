@@ -9,10 +9,7 @@ def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-N_SHAPES = 3
-P_SHAPE_E0 = [0.75, 0.5, 0.25]
-Y_NOISE_SD = 0.1
-BRIGHTNESS_NOISE_SD = [0.01, 1]
+P_SHAPE_E0 = [0.8, 0.6, 0.2]
 
 
 def make_data(train_ratio, batch_size, n_workers):
@@ -25,10 +22,14 @@ def make_data(train_ratio, batch_size, n_workers):
         x = data['imgs'].astype('float32')
         x = x.reshape(len(x), -1)
         factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
+        orientation = factors.orientation.values
+        idxs = np.where(orientation == 0)[0]
+        x, factors = x[idxs], factors.iloc[idxs]
         shape = factors['shape'].values
+        n_shapes = int(shape.max())
 
         idxs_env0, idxs_env1 = [], []
-        for shape_idx in range(N_SHAPES):
+        for shape_idx in range(n_shapes):
             idxs = np.where(shape == shape_idx + 1)[0]
             idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
             idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
@@ -41,11 +42,12 @@ def make_data(train_ratio, batch_size, n_workers):
         # Standardize and add e-invariant noise
         area = x.sum(axis=1) / x_size
         area = (area - area.mean()) / area.std()
-        y = (area + rng.normal(0, Y_NOISE_SD, len(area))).astype('float32')
-        # Add e-dependent noise and scale to [0, 1]
+        y = area + rng.normal(0, 1, len(area))
+        # y and brightness are positively correlated in env0, and negatively correlated in env1
         brightness = np.copy(y)
-        brightness[idxs_env0] += rng.normal(0, BRIGHTNESS_NOISE_SD[0], len(idxs_env0))
-        brightness[idxs_env1] += rng.normal(0, BRIGHTNESS_NOISE_SD[1], len(idxs_env1))
+        brightness[idxs_env1] *= -1
+        brightness += rng.normal(0, 1, len(brightness))
+
         brightness[idxs_env0] = min_max_scale(brightness[idxs_env0])
         brightness[idxs_env1] = min_max_scale(brightness[idxs_env1])
 
@@ -54,11 +56,11 @@ def make_data(train_ratio, batch_size, n_workers):
         x[idxs_env0] *= brightness[idxs_env0]
         x[idxs_env1] *= brightness[idxs_env1]
 
-        e = np.zeros(n_examples, dtype='float32')
+        e = np.zeros(n_examples)
         e[idxs_env1] = 1
 
         x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
-        y, e = y[:, None], e[:, None]
+        y, e = y[:, None].float(), e[:, None].float()
         torch.save((x, y, e), fpath)
     n_examples = len(x)
     n_train = int(train_ratio * n_examples)

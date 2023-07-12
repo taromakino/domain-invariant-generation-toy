@@ -56,7 +56,7 @@ class VAE(pl.LightningModule):
 
     def posterior_dist(self, x, y, e_idx):
         batch_size = len(x)
-        xy = torch.cat((x, y), dim=1)
+        xy = torch.hstack((x, y))
         posterior_mu_causal = self.encoder_mu(xy)
         posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_envs, 2 * self.z_size)
         posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), e_idx, :]
