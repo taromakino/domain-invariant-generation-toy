@@ -1,9 +1,7 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
-import torch.distributions as D
 from argparse import ArgumentParser
 from dsprites.data import make_data
 from dsprites.model import VAE
@@ -24,11 +22,7 @@ def main(args):
     posterior_dist = vae.posterior_dist(x_seed, y_seed, e_idx_seed)
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
-    prior_mu_causal = vae.prior_mu_causal[e_idx_seed][None]
-    prior_mu_spurious = y_seed * vae.prior_mu_causal[e_idx_seed][None]
-    prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
-    prior_cov = torch.eye(prior_mu.shape[1]).expand(1, prior_mu.shape[1], prior_mu.shape[1])
-    prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
+    prior_dist = vae.prior_dist(y_seed, e_idx_seed)
     fig, axes = plt.subplots(2, args.n_cols)
     fig.suptitle(f'y={y_seed.item():.3f}, e={e_seed.item()}')
     for ax in axes.flatten():

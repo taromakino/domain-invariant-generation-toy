@@ -43,14 +43,18 @@ class VAE(pl.LightningModule):
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
+        prior_dist = self.prior_dist(y, e_idx)
+        kl = D.kl_divergence(posterior_dist, prior_dist)
+        elbo = log_prob_x_z - kl
+        return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_dist.loc)
+
+    def prior_dist(self, y, e_idx):
+        batch_size = len(y)
         prior_mu_causal = self.prior_mu_causal[e_idx]
         prior_mu_spurious = y * self.prior_mu_causal[e_idx]
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
         prior_cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
-        prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
-        kl = D.kl_divergence(posterior_dist, prior_dist)
-        elbo = log_prob_x_z - kl
-        return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_mu)
+        return D.MultivariateNormal(prior_mu, prior_cov)
 
     def posterior_dist(self, x, y, e_idx):
         batch_size = len(x)

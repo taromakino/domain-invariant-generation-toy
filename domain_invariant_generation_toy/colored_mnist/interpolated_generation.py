@@ -3,7 +3,6 @@ import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
-import torch.distributions as D
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
 from colored_mnist.model import VAE
@@ -28,11 +27,7 @@ def main(args):
     posterior_dist = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
-    prior_mu_causal = vae.prior_mu_causal[e_idx_seed][None]
-    prior_mu_spurious = vae.prior_mu_spurious[y_idx_seed, e_idx_seed][None]
-    prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
-    prior_cov = torch.eye(prior_mu.shape[1]).expand(1, prior_mu.shape[1], prior_mu.shape[1])
-    prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
+    prior_dist = vae.prior_dist(y_idx_seed, e_idx_seed)
     fig, axes = plt.subplots(2, args.n_cols)
     fig.suptitle(f'y={y_seed.item()}, e={e_seed.item()}')
     for ax in axes.flatten():
@@ -44,13 +39,10 @@ def main(args):
     plot_red_green_image(axes[0, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     for col_idx in range(2, args.n_cols):
-        alpha = rng.beta(2, 5)
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
-        zc_perturb = alpha * zc_seed + (1 - alpha) * zc_sample
-        zs_perturb = alpha * zs_seed + (1 - alpha) * zs_sample
-        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
-        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_perturb))))
+        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_sample, zs_seed))))
+        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_sample))))
         plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
         plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
