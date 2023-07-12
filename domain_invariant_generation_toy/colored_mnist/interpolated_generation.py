@@ -44,7 +44,7 @@ def main(args):
     plot_red_green_image(axes[0, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     for col_idx in range(2, args.n_cols):
-        alpha = rng.random()
+        alpha = rng.beta(2, 5)
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
         zc_perturb = alpha * zc_seed + (1 - alpha) * zc_sample

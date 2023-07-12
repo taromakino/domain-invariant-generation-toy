@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--dpath', type=str, default='results')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--z_size', type=int, default=10)
-    parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
+    parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--prior_reg_mult', type=float, default=0)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)

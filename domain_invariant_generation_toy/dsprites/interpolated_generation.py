@@ -19,7 +19,6 @@ def main(args):
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     x, y, e = data_train.dataset[:]
-    n_envs = int(e.max() + 1)
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
     e_idx_seed = e_seed.squeeze().int()
@@ -27,9 +26,7 @@ def main(args):
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     prior_mu_causal = vae.prior_mu_causal[e_idx_seed][None]
-    prior_mu_spurious = vae.prior_mu_spurious(y_seed)
-    prior_mu_spurious = prior_mu_spurious.reshape(1, n_envs, existing_args.z_size)
-    prior_mu_spurious = prior_mu_spurious[0, e_idx_seed, :][None]
+    prior_mu_spurious = y_seed * vae.prior_mu_causal[e_idx_seed][None]
     prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
     prior_cov = torch.eye(prior_mu.shape[1]).expand(1, prior_mu.shape[1], prior_mu.shape[1])
     prior_dist = D.MultivariateNormal(prior_mu, prior_cov)
@@ -44,7 +41,7 @@ def main(args):
     plot_grayscale_image(axes[0, 1], x_pred.reshape((64, 64)).detach().numpy())
     plot_grayscale_image(axes[1, 1], x_pred.reshape((64, 64)).detach().numpy())
     for col_idx in range(2, args.n_cols):
-        alpha = rng.random()
+        alpha = rng.beta(2, 5)
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
         zc_perturb = alpha * zc_seed + (1 - alpha) * zc_sample
