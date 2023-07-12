@@ -12,7 +12,6 @@ from utils.plot import plot_grayscale_image
 
 
 def main(args):
-    rng = np.random.RandomState(args.seed)
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)

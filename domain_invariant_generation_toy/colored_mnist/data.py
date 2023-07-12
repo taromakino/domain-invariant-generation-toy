@@ -12,9 +12,12 @@ def flip_binary(rng, x, flip_prob):
     return x
 
 
-def make_environment(rng, images, digits, color_flip_prob):
-    y = flip_binary(rng, digits.clone(), 0.25)
-    colors = flip_binary(rng, y.clone(), color_flip_prob)
+def make_environment(images, digits, is_flip_color):
+    y = digits.clone()
+    if is_flip_color:
+        colors = 1 - y
+    else:
+        colors = y
     images = torch.stack([images, images], dim=1)
     images[np.arange(len(images)), 1 - colors, :, :] = 0
     images = images / 255
@@ -35,8 +38,10 @@ def make_data(train_ratio, batch_size, n_workers):
     env0_idxs.append(rng.choice(one_idxs, int(0.25 * len(one_idxs)), replace=False))
     env0_idxs = np.concatenate(env0_idxs)
     env1_idxs = np.setdiff1d(np.arange(n_total), env0_idxs)
-    digits_env0, y_env0, colors_env0, images_env0 = make_environment(rng, images[env0_idxs], digits[env0_idxs], 0.1)
-    digits_env1, y_env1, colors_env1, images_env1 = make_environment(rng, images[env1_idxs], digits[env1_idxs], 0.9)
+    rng.shuffle(env0_idxs)
+    rng.shuffle(env1_idxs)
+    digits_env0, y_env0, colors_env0, images_env0 = make_environment(images[env0_idxs], digits[env0_idxs], False)
+    digits_env1, y_env1, colors_env1, images_env1 = make_environment(images[env1_idxs], digits[env1_idxs], True)
     e = torch.zeros(n_total)[:, None]
     e[env1_idxs] = 1
     digits = torch.cat((digits_env0, digits_env1))[:, None].float()
