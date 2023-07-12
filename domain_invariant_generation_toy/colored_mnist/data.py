@@ -37,8 +37,9 @@ def make_data(train_ratio, batch_size, n_workers):
     env1_idxs = np.setdiff1d(np.arange(n_total), env0_idxs)
     digits_env0, y_env0, colors_env0, images_env0 = make_environment(rng, images[env0_idxs], digits[env0_idxs], 0.25)
     digits_env1, y_env1, colors_env1, images_env1 = make_environment(rng, images[env1_idxs], digits[env1_idxs], 0.75)
-    e = torch.ones(n_total)[:, None]
-    e[:len(env0_idxs)] = 0
+    e0 = torch.zeros(len(env0_idxs))
+    e1 = torch.ones(len(env1_idxs))
+    e = torch.cat((e0, e1))[:, None]
     digits = torch.cat((digits_env0, digits_env1)).float()[:, None]
     y = torch.cat((y_env0, y_env1)).float()[:, None]
     colors = torch.cat((colors_env0, colors_env1)).float()[:, None]
