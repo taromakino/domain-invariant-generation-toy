@@ -1,6 +1,10 @@
 import numpy as np
 
 
+def plot_grayscale_image(ax, image):
+    ax.imshow(image, cmap='grayscale', vmin=0, vmax=1)
+
+
 def plot_red_green_image(ax, image):
     '''
     Input image has shape (2, m, n)

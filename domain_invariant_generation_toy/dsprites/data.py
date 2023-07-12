@@ -12,7 +12,7 @@ def min_max_scale(x):
 N_SHAPES = 3
 P_SHAPE_E0 = [0.75, 0.5, 0.25]
 Y_NOISE_SD = 0.1
-BRIGHTNESS_NOISE_SD = [0.2, 0.3]
+BRIGHTNESS_NOISE_SD = [0.01, 1]
 
 
 def make_data(train_ratio, batch_size, n_workers):
