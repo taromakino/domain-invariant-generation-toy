@@ -18,7 +18,7 @@ def main(args):
     x, y, e = data_train.dataset[:]
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
-    e_idx_seed = e_seed.squeeze().int()
+    e_idx_seed = e_seed.int()[:, 0]
     posterior_dist = vae.posterior_dist(x_seed, y_seed, e_idx_seed)
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)

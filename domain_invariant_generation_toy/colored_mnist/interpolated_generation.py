@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
@@ -11,7 +10,6 @@ from utils.plot import plot_red_green_image
 
 
 def main(args):
-    rng = np.random.RandomState(args.seed)
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
@@ -22,8 +20,8 @@ def main(args):
     e, digits, y, colors, x = e[idxs], digits[idxs], y[idxs], colors[idxs], x[idxs]
     x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
     x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
-    y_idx_seed = y_seed.squeeze().int()
-    e_idx_seed = e_seed.squeeze().int()
+    y_idx_seed = y_seed.int()[:, 0]
+    e_idx_seed = e_seed.int()[:, 0]
     posterior_dist = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
     z_seed = posterior_dist.loc.detach()
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)

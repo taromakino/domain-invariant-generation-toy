@@ -34,8 +34,7 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
-        batch_size = len(x)
-        e_idx = e.squeeze().int()
+        e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
         posterior_dist = self.posterior_dist(x, y, e_idx)
         z = self.sample_z(posterior_dist)
