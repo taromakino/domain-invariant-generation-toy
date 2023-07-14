@@ -5,6 +5,10 @@ import torch
 from utils.nn_utils import make_dataloader
 
 
+def standardize(x):
+    return (x - x.mean(0)) / x.std(0)
+
+
 def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
@@ -23,19 +27,16 @@ def make_data(train_ratio, batch_size, n_workers):
         idxs = np.where(orientation == 0)[0]
         x, factors = x[idxs], factors.iloc[idxs]
         n_total, x_size = x.shape
-        idxs_env1 = rng.choice(np.arange(n_total), int(train_ratio * n_total), replace=False)
+        idxs_env1 = rng.choice(np.arange(n_total), int(n_total // 2))
 
-        # Standardize and add e-invariant noise
-        y = x.sum(axis=1) / x_size
-        y = min_max_scale(y)
-        y = y + rng.normal(0, 0.1, len(y))
-        y = np.clip(y, 0, 1)
-        # y and brightness are positively correlated in env0, and negatively correlated in env1
+        # y is area with noise
+        area = x.sum(axis=1) / x_size
+        y = min_max_scale(area)
+
+        # Positively correlated in env0, and negatively correlated in env1
         brightness = 2 * np.copy(y) - 1
         brightness[idxs_env1] *= -1
         brightness = (brightness + 1) / 2
-        brightness += rng.normal(0, 0.1, len(brightness))
-        brightness = np.clip(brightness, 0, 1)
         brightness = brightness[:, None]
 
         x *= brightness
