@@ -9,9 +9,6 @@ def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-P_SHAPE_E0 = [0.8, 0.6, 0.2]
-
-
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     fpath = os.path.join(os.environ['DATA_DPATH'], 'dsprites.pt')
@@ -25,43 +22,34 @@ def make_data(train_ratio, batch_size, n_workers):
         orientation = factors.orientation.values
         idxs = np.where(orientation == 0)[0]
         x, factors = x[idxs], factors.iloc[idxs]
-        shape = factors['shape'].values
-        n_shapes = int(shape.max())
+        n_total, x_size = x.shape
+        idxs_env1 = rng.choice(np.arange(n_total), int(train_ratio * n_total), replace=False)
 
-        idxs_env1 = []
-        for shape_idx in range(n_shapes):
-            idxs = np.where(shape == shape_idx + 1)[0]
-            idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
-            idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
-            idxs_env1.append(idxs_e1_elem)
-        idxs_env1 = np.concatenate(idxs_env1)
-
-        n_examples, x_size = x.shape
         # Standardize and add e-invariant noise
-        area = x.sum(axis=1) / x_size
-        area = min_max_scale(area)
-        # y = area + rng.normal(0, 1, len(area))
-        y = area
+        y = x.sum(axis=1) / x_size
+        y = min_max_scale(y)
+        y = y + rng.normal(0, 0.1, len(y))
+        y = np.clip(y, 0, 1)
         # y and brightness are positively correlated in env0, and negatively correlated in env1
         brightness = 2 * np.copy(y) - 1
         brightness[idxs_env1] *= -1
-        # brightness += rng.normal(0, 1, len(brightness))
-
         brightness = (brightness + 1) / 2
+        brightness += rng.normal(0, 0.1, len(brightness))
+        brightness = np.clip(brightness, 0, 1)
         brightness = brightness[:, None]
 
         x *= brightness
 
-        e = np.zeros(n_examples)
+        e = np.zeros(n_total)
         e[idxs_env1] = 1
 
         x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
         y, e = y[:, None].float(), e[:, None].float()
         torch.save((x, y, e), fpath)
-    n_examples = len(x)
-    n_train = int(train_ratio * n_examples)
-    train_idxs = rng.choice(n_examples, n_train, replace=False)
-    val_idxs = np.setdiff1d(np.arange(n_examples), train_idxs)
+    n_total = len(x)
+    n_train = int(train_ratio * n_total)
+    train_idxs = rng.choice(n_total, n_train, replace=False)
+    val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
     x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)

@@ -2,12 +2,23 @@ import matplotlib.pyplot as plt
 import os
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
+import torch.distributions as D
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
-from colored_mnist.model import VAE, CausalPredictor, SpuriousPredictor
-from torch.optim import Adam
+from colored_mnist.model import VAE
+from torch.optim import SGD
 from utils.file import load_file
 from utils.plot import plot_red_green_image
+
+
+def loss_causal(vae, p_zc, x, y, zc, zs):
+    x_pred = vae.decoder(torch.hstack((zc, zs)))
+    log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
+    y_pred = vae.causal_classifier(zc)
+    log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+    log_prob_zc = p_zc.log_prob(zc).mean()
+    return -1 * (log_prob_x_z + log_prob_y_zc + log_prob_zc)
 
 
 def main(args):
@@ -16,51 +27,42 @@ def main(args):
     data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
-    causal_predictor = CausalPredictor.load_from_checkpoint(os.path.join(args.dpath, 'causal_predictor',
-        f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
-    spurious_predictor = SpuriousPredictor.load_from_checkpoint(os.path.join(args.dpath, 'spurious_predictor',
-        f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
-    vae.eval()
-    causal_predictor.eval()
-    spurious_predictor.eval()
-    e, digits, y, colors, x = data_train.dataset[:]
-    idxs = (digits == y == colors) and (e == 0)
-    e, digits, y, colors, x = e[idxs], digits[idxs], y[idxs], colors[idxs], x[idxs]
-    x_seed, y_seed, e_seed = x[args.example_idx], y[args.example_idx], e[args.example_idx]
-    x_seed, y_seed, e_seed = x_seed[None], y_seed[None], e_seed[None]
-    y_idx_seed = y_seed.squeeze().int()
-    e_idx_seed = e_seed.squeeze().int()
-    posterior_dist = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
-    z_seed = posterior_dist.loc.detach()
-    zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
-    fig, axes = plt.subplots(2, args.n_cols)
+    e_train, digits_train, y_train, colors_train, x_train = data_train.dataset[:]
+    y_idx_train = y_train.int()[:, 0]
+    e_idx_train = e_train.int()[:, 0]
+    posterior_dist = vae.posterior_dist(x_train, y_idx_train, e_idx_train)
+    z_train = posterior_dist.loc.detach()
+    zc_train, zs_train = torch.chunk(z_train, 2, dim=1)
+    zc_mu = zc_train.mean(dim=0)
+    zc_cov = torch.cov(torch.swapaxes(zc_train, 0, 1))
+    if len(zc_cov.shape) == 0:
+        zc_cov = zc_cov.view(1, 1)
+    p_zc = D.MultivariateNormal(zc_mu, zc_cov)
+    idxs = ((digits_train == y_train) & (y_train == colors_train) & (e_train == 0)).squeeze()
+    e_train, digits_train, y_train, colors_train, x_train, z_train = e_train[idxs], digits_train[idxs], y_train[idxs], \
+        colors_train[idxs], x_train[idxs], z_train[idxs]
+    x_seed, y_seed, e_seed, z_seed = x_train[args.example_idx], y_train[args.example_idx], \
+        e_train[args.example_idx], z_train[args.example_idx]
+    x_seed, y_seed, e_seed, z_seed = x_seed[None], y_seed[None], e_seed[None], z_seed[None]
+    fig, axes = plt.subplots(1, args.n_cols)
     fig.suptitle(f'y={y_seed.item()}, e={e_seed.item()}')
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
-    plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
-    plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     x_pred = torch.sigmoid(vae.decoder(z_seed))
-    plot_red_green_image(axes[0, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
-    plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    plot_red_green_image(axes[1], x_pred.reshape((2, 28, 28)).detach().numpy())
+    zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     zc_perturb = zc_seed.clone().requires_grad_(True)
-    zs_perturb = zs_seed.clone().requires_grad_(True)
-    zc_optim = Adam([zc_perturb], lr=args.lr)
-    zs_optim = Adam([zs_perturb], lr=args.lr)
+    zc_optim = SGD([zc_perturb], lr=args.lr)
     for col_idx in range(2, args.n_cols):
         for _ in range(args.n_steps_per_col):
             zc_optim.zero_grad()
-            loss_causal = causal_predictor(zc_perturb, 1 - y_seed)
-            loss_causal.backward()
+            loss_causal_step = loss_causal(vae, p_zc, x_seed, 1 - y_seed, zc_perturb, zs_seed)
+            loss_causal_step.backward()
             zc_optim.step()
-            zs_optim.zero_grad()
-            loss_spurious = spurious_predictor(zs_perturb, 1 - y_seed, e_seed)
-            loss_spurious.backward()
-            zs_optim.step()
         x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
-        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_perturb))))
-        plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
-        plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
+        plot_red_green_image(axes[col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
     plt.show(block=True)
 
 
@@ -70,6 +72,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=5)
-    parser.add_argument('--n_steps_per_col', type=int, default=5000)
-    parser.add_argument('--lr', type=float, default=0.5)
+    parser.add_argument('--n_steps_per_col', type=int, default=1000)
+    parser.add_argument('--lr', type=float, default=1e-3)
     main(parser.parse_args())

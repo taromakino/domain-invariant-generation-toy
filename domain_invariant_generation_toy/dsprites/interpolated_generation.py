@@ -36,8 +36,10 @@ def main(args):
     for col_idx in range(2, args.n_cols):
         z_sample = prior_dist.sample()
         zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
-        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_sample, zs_seed))))
-        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_sample))))
+        zc_perturb = args.alpha * zc_sample + (1 - args.alpha) * zc_seed
+        zs_perturb = args.alpha * zs_sample + (1 - args.alpha) * zs_seed
+        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
+        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_perturb))))
         plot_grayscale_image(axes[0, col_idx], x_pred_causal.reshape((64, 64)).detach().numpy())
         plot_grayscale_image(axes[1, col_idx], x_pred_spurious.reshape((64, 64)).detach().numpy())
     plt.show(block=True)
@@ -49,4 +51,5 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=20)
     parser.add_argument('--example_idx', type=int, default=0)
+    parser.add_argument('--alpha', type=float, default=1)
     main(parser.parse_args())
