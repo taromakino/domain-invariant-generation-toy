@@ -54,7 +54,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, required=True)
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--n_cols', type=int, default=20)
+    parser.add_argument('--n_cols', type=int, default=10)
     parser.add_argument('--example_idx', type=int, default=0)
     parser.add_argument('--alpha', type=float, default=1)
     main(parser.parse_args())
