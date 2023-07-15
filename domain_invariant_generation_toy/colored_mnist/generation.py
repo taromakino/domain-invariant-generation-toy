@@ -12,13 +12,21 @@ from utils.file import load_file
 from utils.plot import plot_red_green_image
 
 
-def loss_causal(vae, p_zc, x, y, zc, zs):
+def approx_prior(z):
+    z_mu = z.mean(dim=0)
+    z_cov = torch.cov(torch.swapaxes(z, 0, 1))
+    if len(z_cov.shape) == 0:
+        z_cov = z_cov.view(1, 1)
+    return D.MultivariateNormal(z_mu, z_cov)
+
+
+def loss_causal(vae, zc_prior, x, y, zc, zs):
     x_pred = vae.decoder(torch.hstack((zc, zs)))
     log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
     y_pred = vae.causal_classifier(zc)
     log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-    log_prob_zc = p_zc.log_prob(zc).mean()
-    return -1 * (log_prob_x_z + log_prob_y_zc + log_prob_zc)
+    log_prob_zc = zc_prior.log_prob(zc).mean()
+    return -log_prob_x_z - log_prob_y_zc - log_prob_zc
 
 
 def main(args):
@@ -33,11 +41,7 @@ def main(args):
     posterior_dist = vae.posterior_dist(x_train, y_idx_train, e_idx_train)
     z_train = posterior_dist.loc.detach()
     zc_train, zs_train = torch.chunk(z_train, 2, dim=1)
-    zc_mu = zc_train.mean(dim=0)
-    zc_cov = torch.cov(torch.swapaxes(zc_train, 0, 1))
-    if len(zc_cov.shape) == 0:
-        zc_cov = zc_cov.view(1, 1)
-    p_zc = D.MultivariateNormal(zc_mu, zc_cov)
+    zc_prior = approx_prior(zc_train)
     idxs = ((digits_train == y_train) & (y_train == colors_train) & (e_train == 0)).squeeze()
     e_train, digits_train, y_train, colors_train, x_train, z_train = e_train[idxs], digits_train[idxs], y_train[idxs], \
         colors_train[idxs], x_train[idxs], z_train[idxs]
@@ -58,7 +62,7 @@ def main(args):
     for col_idx in range(2, args.n_cols):
         for _ in range(args.n_steps_per_col):
             zc_optim.zero_grad()
-            loss_causal_step = loss_causal(vae, p_zc, x_seed, 1 - y_seed, zc_perturb, zs_seed)
+            loss_causal_step = loss_causal(vae, zc_prior, x_seed, 1 - y_seed, zc_perturb, zs_seed)
             loss_causal_step.backward()
             zc_optim.step()
         x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
