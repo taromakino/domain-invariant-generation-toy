@@ -23,7 +23,7 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.causal_classifier = MLP(z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
-        self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
+        self.prior_mu_causal = nn.Parameter(torch.zeros(1, self.z_size))
         nn.init.xavier_normal_(self.prior_mu_causal)
         # p(z_s|y,e)
         self.prior_mu_spurious = MLP(1, h_sizes, n_envs * self.z_size, nn.ReLU)
@@ -54,7 +54,7 @@ class VAE(pl.LightningModule):
 
     def prior_dist(self, y, e_idx):
         batch_size = len(y)
-        prior_mu_causal = self.prior_mu_causal[e_idx]
+        prior_mu_causal = self.prior_mu_causal.expand(batch_size, self.z_size)
         prior_mu_spurious = self.prior_mu_spurious(y)
         prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
         prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]

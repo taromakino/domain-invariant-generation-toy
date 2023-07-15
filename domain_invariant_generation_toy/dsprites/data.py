@@ -19,11 +19,11 @@ def make_data(train_ratio, batch_size, n_workers):
         x = data['imgs'].astype('float32')
         x = x.reshape(len(x), -1)
         factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
-        # Square and ellipse, no rotation
-        idxs = np.where((factors.orientation == 0) & (factors['shape'] <= 2))[0]
+        orientation = factors.orientation.values
+        idxs = np.where(orientation == 0)[0]
         x, factors = x[idxs], factors.iloc[idxs]
         n_total, x_size = x.shape
-        idxs_env1 = np.where(factors['shape'] == 2)[0]
+        idxs_env1 = rng.choice(np.arange(n_total), int(n_total // 2))
 
         # y is area with noise
         area = x.sum(axis=1) / x_size
