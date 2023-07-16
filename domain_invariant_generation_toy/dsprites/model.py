@@ -53,7 +53,20 @@ class VAE(pl.LightningModule):
         prior_dist = self.prior_dist(y, e_idx)
         kl = D.kl_divergence(posterior_dist, prior_dist)
         elbo = log_prob_x_z + log_prob_y_zc - kl
-        return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_dist.loc)
+        # KL(p(z_c|e)p(z_s|y,e) || N(0, I))
+        return -elbo.mean() + self.prior_reg_mult * self.prior_reg(prior_dist).mean()
+
+    def posterior_dist(self, x, y, e_idx):
+        batch_size = len(x)
+        xy = torch.hstack((x, y))
+        posterior_mu_causal = self.encoder_mu(xy)
+        posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_envs, 2 * self.z_size)
+        posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), e_idx, :]
+        posterior_cov_tril_causal = self.encoder_cov_tril(xy)
+        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_envs,
+            size_to_n_tril(2 * self.z_size))
+        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
+        return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_tril_causal)
 
     def prior_dist(self, y, e_idx):
         batch_size = len(y)
@@ -74,17 +87,12 @@ class VAE(pl.LightningModule):
         prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         return D.MultivariateNormal(prior_mu, prior_cov)
 
-    def posterior_dist(self, x, y, e_idx):
-        batch_size = len(x)
-        xy = torch.hstack((x, y))
-        posterior_mu_causal = self.encoder_mu(xy)
-        posterior_mu_causal = posterior_mu_causal.reshape(batch_size, self.n_envs, 2 * self.z_size)
-        posterior_mu_causal = posterior_mu_causal[torch.arange(batch_size), e_idx, :]
-        posterior_cov_tril_causal = self.encoder_cov_tril(xy)
-        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_envs,
-            size_to_n_tril(2 * self.z_size))
-        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
-        return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_tril_causal)
+    def prior_reg(self, prior_dist):
+        batch_size = len(prior_dist.loc)
+        mu = torch.zeros_like(prior_dist.loc).to(self.device)
+        cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
+        standard_normal = D.MultivariateNormal(mu, cov)
+        return D.kl_divergence(prior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)
