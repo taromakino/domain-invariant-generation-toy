@@ -11,41 +11,45 @@ def min_max_scale(x):
 
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
-    fpath = os.path.join(os.environ['DATA_DPATH'], 'dsprites.pt')
-    if os.path.exists(fpath):
-        x, y, e = torch.load(fpath)
-    else:
-        data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
-        x = data['imgs'].astype('float32')
-        x = x.reshape(len(x), -1)
-        factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
-        orientation = factors.orientation.values
-        idxs = np.where(orientation == 0)[0]
-        x, factors = x[idxs], factors.iloc[idxs]
-        n_total, x_size = x.shape
-        idxs_env1 = rng.choice(np.arange(n_total), int(n_total // 2))
+    data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
+    x = data['imgs'].astype('float32')
+    x = x.reshape(len(x), -1)
+    factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
+    orientation = factors.orientation.values
+    idxs = np.where(orientation == 0)[0]
+    x, factors = x[idxs], factors.iloc[idxs]
+    n_total, x_size = x.shape
+    idxs_env0 = rng.choice(np.arange(n_total), int(n_total // 2), replace=False)
+    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
 
-        # y is area with noise
-        area = x.sum(axis=1) / x_size
-        y = min_max_scale(area)
-        y = np.clip(y + rng.normal(0, 0.2, size=len(y)), 0, 1)
+    y = x.sum(axis=1) / x_size
+    y += rng.normal(0, 0.1, size=len(y))
+    y = min_max_scale(y)
 
-        # Positively correlated in env0, and negatively correlated in env1
-        brightness = 2 * np.copy(y) - 1
-        brightness[idxs_env1] *= -1
-        brightness = (brightness + 1) / 2
-        brightness = np.clip(brightness + rng.normal(0, 0.2, size=len(brightness)), 0, 1)
-        brightness = brightness[:, None]
+    y_q1 = np.quantile(y, 0.25)
+    brightness_env0 = np.full(len(idxs_env0), np.nan)
+    brightness_env1 = np.full(len(idxs_env1), np.nan)
+    y_env0 = y[idxs_env0]
+    y_env1 = y[idxs_env1]
 
-        x *= brightness
+    brightness_env0[y_env0 < y_q1] = rng.normal(0.25, 0.1, (y_env0 < y_q1).sum())
+    brightness_env0[y_env0 >= y_q1] = rng.normal(0.75, 0.1, (y_env0 >= y_q1).sum())
+    brightness_env1[y_env1 < y_q1] = rng.normal(0.75, 0.1, (y_env1 < y_q1).sum())
+    brightness_env1[y_env1 >= y_q1] = rng.normal(0.25, 0.1, (y_env1 >= y_q1).sum())
+    brightness = np.full_like(y, np.nan)
+    brightness[idxs_env0] = brightness_env0
+    brightness[idxs_env1] = brightness_env1
 
-        e = np.zeros(n_total)
-        e[idxs_env1] = 1
+    brightness = np.clip(brightness, 0, 1)[:, None]
 
-        x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
-        y, e = y[:, None].float(), e[:, None].float()
-        torch.save((x, y, e), fpath)
-    n_total = len(x)
+    x *= brightness
+
+    e = np.zeros(n_total)
+    e[idxs_env1] = 1
+
+    x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
+    y, e = y[:, None].float(), e[:, None].float()
+
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
