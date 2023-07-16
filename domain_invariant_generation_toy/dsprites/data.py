@@ -23,7 +23,7 @@ def make_data(train_ratio, batch_size, n_workers):
     idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
 
     y = x.sum(axis=1) / x_size
-    y += rng.normal(0, 0.1, size=len(y))
+    y += rng.normal(0, 0.01, size=len(y))
     y = min_max_scale(y)
 
     y_q1 = np.quantile(y, 0.25)
@@ -32,10 +32,10 @@ def make_data(train_ratio, batch_size, n_workers):
     y_env0 = y[idxs_env0]
     y_env1 = y[idxs_env1]
 
-    brightness_env0[y_env0 < y_q1] = rng.normal(0.25, 0.1, (y_env0 < y_q1).sum())
-    brightness_env0[y_env0 >= y_q1] = rng.normal(0.75, 0.1, (y_env0 >= y_q1).sum())
-    brightness_env1[y_env1 < y_q1] = rng.normal(0.75, 0.1, (y_env1 < y_q1).sum())
-    brightness_env1[y_env1 >= y_q1] = rng.normal(0.25, 0.1, (y_env1 >= y_q1).sum())
+    brightness_env0[y_env0 < y_q1] = rng.normal(0.25, 0.01, (y_env0 < y_q1).sum())
+    brightness_env0[y_env0 >= y_q1] = rng.normal(0.75, 0.01, (y_env0 >= y_q1).sum())
+    brightness_env1[y_env1 < y_q1] = rng.normal(0.75, 0.01, (y_env1 < y_q1).sum())
+    brightness_env1[y_env1 >= y_q1] = rng.normal(0.25, 0.01, (y_env1 >= y_q1).sum())
     brightness = np.full_like(y, np.nan)
     brightness[idxs_env0] = brightness_env0
     brightness[idxs_env1] = brightness_env1

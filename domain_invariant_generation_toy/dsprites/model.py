@@ -24,9 +24,12 @@ class VAE(pl.LightningModule):
         self.causal_classifier = MLP(z_size, h_sizes, 1, nn.ReLU)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(1, self.z_size))
+        self.prior_cov_tril_causal = nn.Parameter(torch.zeros(1, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_causal)
+        nn.init.xavier_normal_(self.prior_cov_tril_causal)
         # p(z_s|y,e)
         self.prior_mu_spurious = MLP(1, h_sizes, n_envs * self.z_size, nn.ReLU)
+        self.prior_cov_tril_spurious = MLP(1, h_sizes, n_envs * size_to_n_tril(self.z_size), nn.ReLU)
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -59,7 +62,16 @@ class VAE(pl.LightningModule):
         prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
         prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
-        prior_cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
+        prior_cov_tril_causal = self.prior_cov_tril_causal.expand(batch_size, size_to_n_tril(self.z_size))
+        prior_cov_tril_causal = arr_to_scale_tril(prior_cov_tril_causal)
+        prior_cov_causal = torch.bmm(prior_cov_tril_causal, torch.transpose(prior_cov_tril_causal, 1, 2))
+        prior_cov_tril_spurious = self.prior_cov_tril_spurious(y)
+        prior_cov_tril_spurious = prior_cov_tril_spurious.reshape(batch_size, self.n_envs, size_to_n_tril(self.z_size))
+        prior_cov_tril_spurious = arr_to_scale_tril(prior_cov_tril_spurious[torch.arange(batch_size), e_idx, :])
+        prior_cov_spurious = torch.bmm(prior_cov_tril_spurious, torch.transpose(prior_cov_tril_spurious, 1, 2))
+        prior_cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=self.device)
+        prior_cov[:, :self.z_size, :self.z_size] = prior_cov_causal
+        prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         return D.MultivariateNormal(prior_mu, prior_cov)
 
     def posterior_dist(self, x, y, e_idx):
