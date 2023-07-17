@@ -12,21 +12,21 @@ def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-def make_data(train_ratio, batch_size, n_workers):
+def make_raw_data():
     rng = np.random.RandomState(0)
     data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
-    x = data['imgs'].astype('float32')
-    x = x.reshape(len(x), -1)
+    images = data['imgs'].astype('float32')
+    images = images.reshape(len(images), -1)
     factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
     orientation = factors.orientation.values
     idxs = np.where(orientation == 0)[0]
-    x, factors = x[idxs], factors.iloc[idxs]
+    images, factors = images[idxs], factors.iloc[idxs]
 
-    shape = factors['shape'].values
-    n_shapes = int(shape.max())
+    shapes = factors['shape'].values
+    n_shapes = int(shapes.max())
     idxs_env0, idxs_env1 = [], []
     for shape_idx in range(n_shapes):
-        idxs = np.where(shape == shape_idx + 1)[0]
+        idxs = np.where(shapes == shape_idx + 1)[0]
         idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
         idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
         idxs_env0.append(idxs_e0_elem)
@@ -34,9 +34,9 @@ def make_data(train_ratio, batch_size, n_workers):
     idxs_env0 = np.concatenate(idxs_env0)
     idxs_env1 = np.concatenate(idxs_env1)
 
-    n_total, x_size = x.shape
+    n_total, x_size = images.shape
 
-    y = x.sum(axis=1) / x_size
+    y = images.sum(axis=1) / x_size
     y += rng.normal(0, 0.01, size=len(y))
     y = min_max_scale(y)
 
@@ -56,14 +56,20 @@ def make_data(train_ratio, batch_size, n_workers):
 
     brightness = np.clip(brightness, 0, 1)[:, None]
 
-    x *= brightness
+    images *= brightness
 
     e = np.zeros(n_total)
     e[idxs_env1] = 1
+    return e, shapes, y, brightness.squeeze(), images
 
-    x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
+
+def make_data(train_ratio, batch_size, n_workers):
+    rng = np.random.RandomState(0)
+    e, shapes, y, brightness, images = make_raw_data()
+    x, y, e = torch.tensor(images), torch.tensor(y), torch.tensor(e)
     y, e = y[:, None].float(), e[:, None].float()
 
+    n_total = len(x)
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)

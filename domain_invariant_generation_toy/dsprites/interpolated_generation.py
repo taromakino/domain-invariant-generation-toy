@@ -11,7 +11,7 @@ from utils.plot import plot_grayscale_image
 
 
 def sample_prior(rng, vae, y_train, e_idx_train):
-    idx = rng.choice(len(y_train), 1).item()
+    idx = [rng.choice(len(y_train), 1).item()]
     prior_dist = vae.prior_dist(y_train[idx], e_idx_train[idx])
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
