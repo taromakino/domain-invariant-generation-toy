@@ -11,7 +11,7 @@ def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
     data_train, data_val = make_data(args.train_ratio, args.batch_size, args.n_workers)
-    e_train, digits_train, y_train, colors_train, x_train = data_train.dataset[:]
+    x_train, y_train, e_train = data_train.dataset[:]
     n_classes = int(y_train.max() + 1)
     n_envs = int(e_train.max() + 1)
     vae = VAE(2 * 28 * 28, args.z_size, args.h_sizes, n_classes, n_envs, args.prior_reg_mult, args.lr)
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--z_size', type=int, default=10)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
-    parser.add_argument('--prior_reg_mult', type=float, default=1e-5)
+    parser.add_argument('--prior_reg_mult', type=float, default=0)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)

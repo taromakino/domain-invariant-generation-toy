@@ -5,8 +5,7 @@ from torchvision import datasets
 from utils.nn_utils import make_dataloader
 
 
-N_CLASSES = 2
-N_ENVS = 2
+PROB_ZERO_E0 = 0.25
 
 
 def flip_binary(rng, x, flip_prob):
@@ -16,42 +15,41 @@ def flip_binary(rng, x, flip_prob):
     return x
 
 
-def make_environment(rng, images, digits, color_flip_prob):
-    y = flip_binary(rng, digits.clone(), 0.25)
-    colors = flip_binary(rng, y.clone(), color_flip_prob)
-    images = torch.stack([images, images], dim=1)
-    images[np.arange(len(images)), 1 - colors, :, :] = 0
-    images = images / 255
-    images = images.flatten(start_dim=1)
-    return digits, y, colors, images
-
-
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
     n_total = len(images)
-    env0_idxs = rng.choice(np.arange(n_total), int(train_ratio * n_total), replace=False)
-    env1_idxs = np.setdiff1d(np.arange(n_total), env0_idxs)
-    digits_env0, y_env0, colors_env0, images_env0 = make_environment(rng, images[env0_idxs], digits[env0_idxs], 0.25)
-    digits_env1, y_env1, colors_env1, images_env1 = make_environment(rng, images[env1_idxs], digits[env1_idxs], 0.75)
-    e0 = torch.zeros(len(env0_idxs))
-    e1 = torch.ones(len(env1_idxs))
-    e = torch.cat((e0, e1))[:, None]
-    digits = torch.cat((digits_env0, digits_env1)).float()[:, None]
-    y = torch.cat((y_env0, y_env1)).float()[:, None]
-    colors = torch.cat((colors_env0, colors_env1)).float()[:, None]
-    images = torch.cat((images_env0, images_env1))
+    idxs_env0 = []
+    zero_idxs = np.where(digits == 0)[0]
+    one_idxs = np.where(digits == 1)[0]
+    idxs_env0.append(rng.choice(zero_idxs, size=int(PROB_ZERO_E0 * len(zero_idxs))))
+    idxs_env0.append(rng.choice(one_idxs, size=int((1 - PROB_ZERO_E0) * len(one_idxs))))
+    idxs_env0 = np.concatenate(idxs_env0)
+    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
+    e = torch.zeros(n_total)
+    e[idxs_env1] = 1
+    y = flip_binary(rng, digits.clone(), 0.25)
+    colors = np.full(n_total, np.nan)
+    idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
+    idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
+    colors[idxs_y0_e0] = rng.binomial(1, 0.2, len(idxs_y0_e0))
+    colors[idxs_y0_e1] = rng.binomial(1, 0.4, len(idxs_y0_e1))
+    colors[idxs_y1_e0] = rng.binomial(1, 0.6, len(idxs_y1_e0))
+    colors[idxs_y1_e1] = rng.binomial(1, 0.8, len(idxs_y1_e1))
+    images = torch.stack([images, images], dim=1)
+    images[np.arange(n_total), 1 - colors, :, :] = 0
+    images = images / 255
+    x = images.flatten(start_dim=1)
+    y, e = y[:, None].float(), e[:, None]
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
-    e_train, digits_train, y_train, colors_train, images_train = e[train_idxs], digits[train_idxs], y[train_idxs], \
-        colors[train_idxs], images[train_idxs]
-    e_val, digits_val, y_val, colors_val, images_val = e[val_idxs], digits[val_idxs], y[val_idxs], colors[val_idxs], \
-        images[val_idxs]
-    assert len(np.unique(y_train)) == len(np.unique(e_train)) == N_CLASSES
-    assert len(np.unique(e_train)) == len(np.unique(e_val)) == N_ENVS
-    data_train = make_dataloader((e_train, digits_train, y_train, colors_train, images_train), batch_size, n_workers, True)
-    data_val = make_dataloader((e_val, digits_val, y_val, colors_val, images_val), batch_size, n_workers, False)
+    x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
+    x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
+    data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
+    data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
     return data_train, data_val

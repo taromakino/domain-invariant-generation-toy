@@ -5,14 +5,14 @@ import torch
 from utils.nn_utils import make_dataloader
 
 
-P_SHAPE_E0 = [0.8, 0.6, 0.1]
+PROB_SHAPE_E0 = [0.1, 0.6, 0.8]
 
 
 def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-def make_raw_data():
+def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
     data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
     images = data['imgs'].astype('float32')
@@ -27,7 +27,7 @@ def make_raw_data():
     idxs_env0, idxs_env1 = [], []
     for shape_idx in range(n_shapes):
         idxs = np.where(shapes == shape_idx + 1)[0]
-        idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
+        idxs_e0_elem = rng.choice(idxs, size=int(PROB_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
         idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
         idxs_env0.append(idxs_e0_elem)
         idxs_env1.append(idxs_e1_elem)
@@ -60,12 +60,6 @@ def make_raw_data():
 
     e = np.zeros(n_total)
     e[idxs_env1] = 1
-    return e, shapes, y, brightness.squeeze(), images
-
-
-def make_data(train_ratio, batch_size, n_workers):
-    rng = np.random.RandomState(0)
-    e, shapes, y, brightness, images = make_raw_data()
     x, y, e = torch.tensor(images), torch.tensor(y), torch.tensor(e)
     y, e = y[:, None].float(), e[:, None].float()
 
