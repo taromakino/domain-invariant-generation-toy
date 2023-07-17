@@ -5,6 +5,9 @@ import torch
 from utils.nn_utils import make_dataloader
 
 
+P_SHAPE_E0 = [0.8, 0.6, 0.1]
+
+
 def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
@@ -18,9 +21,20 @@ def make_data(train_ratio, batch_size, n_workers):
     orientation = factors.orientation.values
     idxs = np.where(orientation == 0)[0]
     x, factors = x[idxs], factors.iloc[idxs]
+
+    shape = factors['shape'].values
+    n_shapes = int(shape.max())
+    idxs_env0, idxs_env1 = [], []
+    for shape_idx in range(n_shapes):
+        idxs = np.where(shape == shape_idx + 1)[0]
+        idxs_e0_elem = rng.choice(idxs, size=int(P_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
+        idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
+        idxs_env0.append(idxs_e0_elem)
+        idxs_env1.append(idxs_e1_elem)
+    idxs_env0 = np.concatenate(idxs_env0)
+    idxs_env1 = np.concatenate(idxs_env1)
+
     n_total, x_size = x.shape
-    idxs_env0 = rng.choice(np.arange(n_total), int(n_total // 2), replace=False)
-    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
 
     y = x.sum(axis=1) / x_size
     y += rng.normal(0, 0.01, size=len(y))
