@@ -36,13 +36,18 @@ def make_data(train_ratio, batch_size, n_workers):
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    colors[idxs_y0_e0] = rng.binomial(1, 0.2, len(idxs_y0_e0))
-    colors[idxs_y0_e1] = rng.binomial(1, 0.4, len(idxs_y0_e1))
-    colors[idxs_y1_e0] = rng.binomial(1, 0.6, len(idxs_y1_e0))
-    colors[idxs_y1_e1] = rng.binomial(1, 0.8, len(idxs_y1_e1))
+    colors[idxs_y0_e0] = rng.normal(0.2, 0.01, len(idxs_y0_e0))
+    colors[idxs_y0_e1] = rng.normal(0.4, 0.01, len(idxs_y0_e1))
+    colors[idxs_y1_e0] = rng.normal(0.6, 0.01, len(idxs_y1_e0))
+    colors[idxs_y1_e1] = rng.normal(0.8, 0.01, len(idxs_y1_e1))
+    colors = np.clip(colors, 0, 1)[:, None, None]
+
     images = torch.stack([images, images], dim=1)
-    images[np.arange(n_total), 1 - colors, :, :] = 0
     images = images / 255
+
+
+    images[:, 0, :, :] *= colors
+    images[:, 1, :, :] *= (1 - colors)
     x = images.flatten(start_dim=1)
     y, e = y[:, None].float(), e[:, None]
     n_train = int(train_ratio * n_total)
