@@ -12,7 +12,7 @@ def min_max_scale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-def make_data(train_ratio, batch_size, n_workers):
+def make_raw_data():
     rng = np.random.RandomState(0)
     data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
     images = data['imgs'].astype('float32')
@@ -62,7 +62,12 @@ def make_data(train_ratio, batch_size, n_workers):
     e[idxs_env1] = 1
     x, y, e = torch.tensor(images), torch.tensor(y), torch.tensor(e)
     y, e = y[:, None].float(), e[:, None].float()
+    return e, shapes, y, brightness, x
 
+
+def make_data(train_ratio, batch_size, n_workers):
+    rng = np.random.RandomState(0)
+    e, shapes, y, brightness, x = make_raw_data()
     n_total = len(x)
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)

@@ -5,14 +5,7 @@ from torchvision import datasets
 from utils.nn_utils import make_dataloader
 
 
-PROB_ZERO_E0 = 0.25
-
-
-def sample_gaussian_mixture(rng, probs, means, sds, n_samples):
-    cov = np.diag(np.square(sds))
-    components = rng.multinomial(1, probs, size=n_samples).argmax(axis=1)
-    samples = rng.multivariate_normal(means, cov, size=n_samples)
-    return samples[np.arange(len(samples)), components]
+PROB_ZERO_E0 = 0.1
 
 
 def flip_binary(rng, x, flip_prob):
@@ -46,10 +39,10 @@ def make_raw_data():
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    colors[idxs_y0_e0] = sample_gaussian_mixture(rng, [0.8, 0.2], [0.2, 0.4], [0.01, 0.01], len(idxs_y0_e0))
-    colors[idxs_y1_e0] = sample_gaussian_mixture(rng, [0.2, 0.8], [0.4, 0.6], [0.01, 0.01], len(idxs_y1_e0))
-    colors[idxs_y0_e1] = sample_gaussian_mixture(rng, [0.8, 0.2], [0.4, 0.6], [0.01, 0.01], len(idxs_y0_e1))
-    colors[idxs_y1_e1] = sample_gaussian_mixture(rng, [0.2, 0.8], [0.6, 0.8], [0.01, 0.01], len(idxs_y1_e1))
+    colors[idxs_y0_e0] = rng.normal(0.2, 0.01, len(idxs_y0_e0))
+    colors[idxs_y1_e0] = rng.normal(0.6, 0.01, len(idxs_y1_e0))
+    colors[idxs_y0_e1] = rng.normal(0.4, 0.01, len(idxs_y0_e1))
+    colors[idxs_y1_e1] = rng.normal(0.8, 0.01, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
     images = torch.stack([images, images], dim=1)
