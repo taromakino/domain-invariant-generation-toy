@@ -5,7 +5,7 @@ from torchvision import datasets
 from utils.nn_utils import make_dataloader
 
 
-PROB_ZERO_E0 = 0.1
+PROB_ZERO_E0 = 0.25
 
 
 def flip_binary(rng, x, flip_prob):
@@ -32,7 +32,7 @@ def make_raw_data():
     e = torch.zeros(n_total)
     e[idxs_env1] = 1
 
-    y = flip_binary(rng, digits.clone(), 0.25)
+    y = flip_binary(rng, digits.clone(), 0.05)
 
     colors = np.full(n_total, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
