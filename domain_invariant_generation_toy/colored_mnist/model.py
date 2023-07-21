@@ -59,16 +59,25 @@ class VAE(pl.LightningModule):
         elbo = log_prob_x_z + log_prob_y_zc - kl
         return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_dist.loc)
 
+    def to_residual(self, z):
+        zc, zs = torch.chunk(z, 2, dim=1)
+        zs = zs - zc
+        return torch.hstack((zc, zs))
+
+
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
         posterior_mu = self.encoder_mu(x)
         posterior_mu = posterior_mu.reshape(batch_size, self.n_classes, self.n_envs, 2 * self.z_size)
         posterior_mu = posterior_mu[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_cov_tril_causal = self.encoder_cov_tril(x)
-        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_classes, self.n_envs,
+        posterior_mu = self.to_residual(posterior_mu)
+        posterior_cov_tril = self.encoder_cov_tril(x)
+        posterior_cov_tril = posterior_cov_tril.reshape(batch_size, self.n_classes, self.n_envs,
             size_to_n_tril(2 * self.z_size))
-        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), y_idx, e_idx, :])
-        return D.MultivariateNormal(posterior_mu, scale_tril=posterior_cov_tril_causal)
+        posterior_cov_tril = posterior_cov_tril[torch.arange(batch_size), y_idx, e_idx, :]
+        posterior_cov_tril = self.to_residual(posterior_cov_tril)
+        posterior_cov_tril = arr_to_scale_tril(posterior_cov_tril)
+        return D.MultivariateNormal(posterior_mu, scale_tril=posterior_cov_tril)
 
     def prior_dist(self, y_idx, e_idx):
         batch_size = len(y_idx)
