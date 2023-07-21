@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim, activation_class):
+    def __init__(self, input_dim, hidden_dims, output_dim, activation_class=nn.ReLU):
         super().__init__()
         module_list = []
         last_in_dim = input_dim

@@ -16,16 +16,14 @@ class VAE(pl.LightningModule):
         self.n_envs = n_envs
         self.z_size = z_size
         # q(z_c|x,y,e)q(z_s|z_c,x,y,e)
-        self.encoder_mu_causal = MLP(x_size, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
-        self.encoder_tril_causal = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size), nn.ReLU)
-        posterior_size_causal = self.z_size + size_to_n_tril(self.z_size)
-        self.encoder_mu_spurious = MLP(x_size + posterior_size_causal, h_sizes, n_classes * n_envs * self.z_size, nn.ReLU)
-        self.encoder_tril_spurious = MLP(x_size + posterior_size_causal, h_sizes, n_classes * n_envs *
-            size_to_n_tril(self.z_size), nn.ReLU)
+        self.encoder_mu_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * self.z_size)
+        self.encoder_tril_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
+        self.encoder_mu_spurious = MLP(x_size, h_sizes, n_classes * n_envs * self.z_size)
+        self.encoder_tril_spurious = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
         # p(x|z_c, z_s)
-        self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
+        self.decoder = MLP(2 * z_size, h_sizes, x_size)
         # p(y|z_c)
-        self.causal_classifier = MLP(z_size, h_sizes, 1, nn.ReLU)
+        self.causal_classifier = MLP(z_size, h_sizes, 1)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(n_envs, self.z_size))
         self.prior_tril_causal = nn.Parameter(torch.zeros(n_envs, size_to_n_tril(self.z_size)))
@@ -46,10 +44,12 @@ class VAE(pl.LightningModule):
     def forward(self, x, y, e):
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
-        # z_c,z_s ~ q(z_c,z_s|x,y,e)
-        posterior_dist_causal, posterior_dist_spurious = self.posterior_dist(x, y_idx, e_idx)
-        z_c = self.sample_z(posterior_dist_causal)
+        # z_s ~ q(z_s|x,y,e)
+        posterior_dist_spurious = self.posterior_dist_spurious(x, y_idx, e_idx)
         z_s = self.sample_z(posterior_dist_spurious)
+        # z_c ~ q(z_c|z_s,x,y,e)
+        posterior_dist_causal = self.posterior_dist_causal(x, y_idx, e_idx, z_s)
+        z_c = self.sample_z(posterior_dist_causal)
         # E_q(zc,zs|x,y,e)[log p(x|zc,zs)]
         x_pred = self.decoder(torch.hstack((z_c, z_s)))
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
@@ -57,48 +57,45 @@ class VAE(pl.LightningModule):
         y_pred = self.causal_classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
         # KL(q(z_c|x,y,e) || p(z_c|e)
-        prior_dist_causal, prior_dist_spurious = self.prior_dist(y_idx, e_idx)
+        prior_dist_causal = self.prior_dist_causal(e_idx)
         kl_causal = D.kl_divergence(posterior_dist_causal, prior_dist_causal)
         # KL(q(z_s|z_c,x,y,e) || p(z_s|y,e)
+        prior_dist_spurious = self.prior_dist_spurious(y_idx, e_idx)
         kl_spurious = D.kl_divergence(posterior_dist_spurious, prior_dist_spurious)
         elbo = log_prob_x_z + log_prob_y_zc - kl_causal - kl_spurious
         return -elbo.mean()
 
-    def posterior_dist(self, x, y_idx, e_idx):
+    def posterior_dist_causal(self, x, y_idx, e_idx, z_s):
         batch_size = len(x)
-        # q(z_c|x,y,e)
-        mu_causal = self.encoder_mu_causal(x)
-        mu_causal = mu_causal.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
-        mu_causal = mu_causal[torch.arange(batch_size), y_idx, e_idx, :]
-        tril_causal = self.encoder_tril_causal(x)
-        tril_causal = tril_causal.reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
-        tril_causal = tril_causal[torch.arange(batch_size), y_idx, e_idx, :]
-        posterior_params_causal = torch.hstack((mu_causal, tril_causal))
-        tril_causal = arr_to_tril(tril_causal)
-        dist_causal = D.MultivariateNormal(mu_causal, scale_tril=tril_causal)
-        # q(z_s|z_c,x,y,e)
-        xzc = torch.hstack((x, posterior_params_causal))
-        mu_spurious = self.encoder_mu_spurious(xzc)
-        mu_spurious = mu_spurious.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
-        mu_spurious = mu_spurious[torch.arange(batch_size), y_idx, e_idx, :]
-        tril_spurious = self.encoder_tril_spurious(xzc)
-        tril_spurious = tril_spurious.reshape(batch_size, self.n_classes, self.n_envs,
-            size_to_n_tril(self.z_size))
-        tril_spurious = tril_spurious[torch.arange(batch_size), y_idx, e_idx, :]
-        tril_spurious = arr_to_tril(tril_spurious)
-        posterior_dist_spurious = D.MultivariateNormal(mu_spurious, scale_tril=tril_spurious)
-        return dist_causal, posterior_dist_spurious
+        mu = self.encoder_mu_causal(torch.hstack((x, z_s)))
+        mu = mu.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
+        mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
+        tril = self.encoder_tril_causal(torch.hstack((x, z_s)))
+        tril = tril.reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
+        tril = tril[torch.arange(batch_size), y_idx, e_idx, :]
+        tril = arr_to_tril(tril)
+        return D.MultivariateNormal(mu, scale_tril=tril)
 
-    def prior_dist(self, y_idx, e_idx):
-        # p(z_c|e)
-        mu_causal = self.prior_mu_causal[e_idx]
-        tril_causal = arr_to_tril(self.prior_tril_causal[e_idx])
-        dist_causal = D.MultivariateNormal(mu_causal, scale_tril=tril_causal)
-        # p(z_s|y,e)
-        mu_spurious = self.prior_mu_spurious[y_idx, e_idx]
-        tril_spurious = arr_to_tril(self.prior_tril_spurious[y_idx, e_idx])
-        dist_spurious = D.MultivariateNormal(mu_spurious, scale_tril=tril_spurious)
-        return dist_causal, dist_spurious
+    def posterior_dist_spurious(self, x, y_idx, e_idx):
+        batch_size = len(x)
+        mu = self.encoder_mu_spurious(x)
+        mu = mu.reshape(batch_size, self.n_classes, self.n_envs, self.z_size)
+        mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
+        tril = self.encoder_tril_spurious(x)
+        tril = tril.reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(self.z_size))
+        tril = tril[torch.arange(batch_size), y_idx, e_idx, :]
+        tril = arr_to_tril(tril)
+        return D.MultivariateNormal(mu, scale_tril=tril)
+
+    def prior_dist_causal(self, e_idx):
+        mu = self.prior_mu_causal[e_idx]
+        tril = arr_to_tril(self.prior_tril_causal[e_idx])
+        return D.MultivariateNormal(mu, scale_tril=tril)
+
+    def prior_dist_spurious(self, y_idx, e_idx):
+        mu = self.prior_mu_spurious[y_idx, e_idx]
+        tril = arr_to_tril(self.prior_tril_spurious[y_idx, e_idx])
+        return D.MultivariateNormal(mu, scale_tril=tril)
 
     def training_step(self, batch, batch_idx):
         loss = self.forward(*batch)
