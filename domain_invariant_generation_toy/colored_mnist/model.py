@@ -16,9 +16,9 @@ class VAE(pl.LightningModule):
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.z_size = z_size
-        # q(z_c|x,e)
-        self.encoder_mu = MLP(x_size, h_sizes, n_envs * 2 * self.z_size, nn.ReLU)
-        self.encoder_cov_tril = MLP(x_size, h_sizes, n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
+        # q(z_c|x,y,e)
+        self.encoder_mu = MLP(x_size, h_sizes, n_classes * n_envs * 2 * self.z_size, nn.ReLU)
+        self.encoder_cov_tril = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(2 * self.z_size), nn.ReLU)
         # p(x|z_c, z_s)
         self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
         # p(y|z_c)
@@ -44,7 +44,7 @@ class VAE(pl.LightningModule):
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
-        posterior_dist = self.posterior_dist(x, e_idx)
+        posterior_dist = self.posterior_dist(x, y_idx, e_idx)
         z = self.sample_z(posterior_dist)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
@@ -59,14 +59,15 @@ class VAE(pl.LightningModule):
         elbo = log_prob_x_z + log_prob_y_zc - kl
         return -elbo.mean() + self.prior_reg_mult * torch.norm(prior_dist.loc)
 
-    def posterior_dist(self, x, e_idx):
+    def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
         posterior_mu = self.encoder_mu(x)
-        posterior_mu = posterior_mu.reshape(batch_size, self.n_envs, 2 * self.z_size)
-        posterior_mu = posterior_mu[torch.arange(batch_size), e_idx, :]
+        posterior_mu = posterior_mu.reshape(batch_size, self.n_classes, self.n_envs, 2 * self.z_size)
+        posterior_mu = posterior_mu[torch.arange(batch_size), y_idx, e_idx, :]
         posterior_cov_tril_causal = self.encoder_cov_tril(x)
-        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_envs, size_to_n_tril(2 * self.z_size))
-        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
+        posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_classes, self.n_envs,
+            size_to_n_tril(2 * self.z_size))
+        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(posterior_mu, scale_tril=posterior_cov_tril_causal)
 
     def prior_dist(self, y_idx, e_idx):

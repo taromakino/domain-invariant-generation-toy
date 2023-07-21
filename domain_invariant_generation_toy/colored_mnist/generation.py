@@ -32,8 +32,9 @@ def main(args):
         map_location='cpu')
     vae.freeze()
     x, y, e = data_train.dataset[:]
+    y_idx = y.int()[:, 0]
     e_idx = e.int()[:, 0]
-    posterior_dist = vae.posterior_dist(x, e_idx)
+    posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
     z = posterior_dist.loc
     zc, zs = torch.chunk(z, 2, dim=1)
     p_zc = multivariate_normal(zc)
@@ -69,5 +70,5 @@ if __name__ == '__main__':
     parser.add_argument('--n_cols', type=int, default=10)
     parser.add_argument('--n_steps_per_col', type=int, default=5000)
     parser.add_argument('--example_idx', type=int, default=0)
-    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--lr', type=float, default=0.01)
     main(parser.parse_args())
