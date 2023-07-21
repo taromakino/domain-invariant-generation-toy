@@ -4,7 +4,7 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from utils.nn_utils import MLP, arr_to_scale_tril, size_to_n_tril
+from utils.nn_utils import MLP, arr_to_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
@@ -65,7 +65,7 @@ class VAE(pl.LightningModule):
         posterior_cov_tril_causal = self.encoder_cov_tril(xy)
         posterior_cov_tril_causal = posterior_cov_tril_causal.reshape(batch_size, self.n_envs,
             size_to_n_tril(2 * self.z_size))
-        posterior_cov_tril_causal = arr_to_scale_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
+        posterior_cov_tril_causal = arr_to_tril(posterior_cov_tril_causal[torch.arange(batch_size), e_idx, :])
         return D.MultivariateNormal(posterior_mu_causal, scale_tril=posterior_cov_tril_causal)
 
     def prior_dist(self, y, e_idx):
@@ -75,11 +75,11 @@ class VAE(pl.LightningModule):
         prior_mu_spurious = prior_mu_spurious.reshape(batch_size, self.n_envs, self.z_size)
         prior_mu_spurious = prior_mu_spurious[torch.arange(batch_size), e_idx, :]
         prior_mu = torch.hstack((prior_mu_causal, prior_mu_spurious))
-        prior_cov_tril_causal = arr_to_scale_tril(self.prior_cov_tril_causal[e_idx])
+        prior_cov_tril_causal = arr_to_tril(self.prior_cov_tril_causal[e_idx])
         prior_cov_causal = torch.bmm(prior_cov_tril_causal, torch.transpose(prior_cov_tril_causal, 1, 2))
         prior_cov_tril_spurious = self.prior_cov_tril_spurious(y)
         prior_cov_tril_spurious = prior_cov_tril_spurious.reshape(batch_size, self.n_envs, size_to_n_tril(self.z_size))
-        prior_cov_tril_spurious = arr_to_scale_tril(prior_cov_tril_spurious[torch.arange(batch_size), e_idx, :])
+        prior_cov_tril_spurious = arr_to_tril(prior_cov_tril_spurious[torch.arange(batch_size), e_idx, :])
         prior_cov_spurious = torch.bmm(prior_cov_tril_spurious, torch.transpose(prior_cov_tril_spurious, 1, 2))
         prior_cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=self.device)
         prior_cov[:, :self.z_size, :self.z_size] = prior_cov_causal
