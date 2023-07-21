@@ -63,9 +63,3 @@ def arr_to_tril(arr):
     diag_idxs = torch.arange(size)
     cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
     return cov
-
-def tril_to_cov(tril):
-    '''
-    Returns a full covariance matrix
-    '''
-    return torch.bmm(tril, torch.transpose(tril, 1, 2))
