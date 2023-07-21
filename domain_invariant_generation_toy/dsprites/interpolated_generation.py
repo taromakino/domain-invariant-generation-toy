@@ -32,7 +32,6 @@ def main(args):
     z_seed = posterior_dist_seed.loc
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     fig, axes = plt.subplots(2, args.n_cols)
-    fig.suptitle(f'y={y_seed.item():.3f}, e={e_seed.item()}')
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])

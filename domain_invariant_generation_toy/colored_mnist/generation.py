@@ -32,9 +32,8 @@ def main(args):
         map_location='cpu')
     vae.freeze()
     x, y, e = data_train.dataset[:]
-    y_idx = y.int()[:, 0]
     e_idx = e.int()[:, 0]
-    posterior_dist = vae.posterior_dist(x, y_idx, e_idx)
+    posterior_dist = vae.posterior_dist(x, e_idx)
     z = posterior_dist.loc
     zc, zs = torch.chunk(z, 2, dim=1)
     p_zc = multivariate_normal(zc)
