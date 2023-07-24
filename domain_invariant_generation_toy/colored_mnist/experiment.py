@@ -15,7 +15,7 @@ def main(args):
     n_classes = int(y_train.max() + 1)
     n_envs = int(e_train.max() + 1)
     vae = VAE(2 * 28 * 28, args.z_size, args.h_sizes, n_classes, n_envs, args.lr, args.n_anneal_epochs)
-    vae_trainer = make_trainer(args.dpath, args.seed, args.n_anneal_epochs, args.early_stop_ratio)
+    vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
 
 
