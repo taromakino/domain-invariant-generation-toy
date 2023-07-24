@@ -15,12 +15,13 @@ class VAE(pl.LightningModule):
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.z_size = z_size
-        # q(z_c|x,y,e)q(z_s|z_c,x,y,e)
+        # q(z_c|x,y,e)
         self.encoder_mu_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * self.z_size)
         self.encoder_tril_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
+        # q(z_s|z_c,x,y,e)
         self.encoder_mu_spurious = MLP(x_size, h_sizes, n_classes * n_envs * self.z_size)
         self.encoder_tril_spurious = MLP(x_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
-        # p(x|z_c, z_s)
+        # p(x|z_c,z_s)
         self.decoder = MLP(2 * z_size, h_sizes, x_size)
         # p(y|z_c)
         self.causal_classifier = MLP(z_size, h_sizes, 1)
@@ -56,13 +57,17 @@ class VAE(pl.LightningModule):
         # E_q(z_c|x,y,e)[log p(y|z_c)]
         y_pred = self.causal_classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
-        # KL(q(z_c|x,y,e) || p(z_c|e)
+        # E_q(z_c|x,y,e)[log p(z_c|e)]
         prior_dist_causal = self.prior_dist_causal(e_idx)
-        kl_causal = D.kl_divergence(posterior_dist_causal, prior_dist_causal)
-        # KL(q(z_s|z_c,x,y,e) || p(z_s|y,e)
+        log_prob_zc_e = prior_dist_causal.log_prob(z_c)
+        # E_q(z_c|x,y,e)[log p(z_s|y,e)]
         prior_dist_spurious = self.prior_dist_spurious(y_idx, e_idx)
-        kl_spurious = D.kl_divergence(posterior_dist_spurious, prior_dist_spurious)
-        elbo = log_prob_x_z + log_prob_y_zc - kl_causal - kl_spurious
+        log_prob_zs_ye = prior_dist_spurious.log_prob(z_s)
+        # H(z_c|x,y,e)
+        entropy_causal = posterior_dist_causal.entropy()
+        # H(z_s|x,y,e)
+        entropy_spurious = posterior_dist_spurious.entropy()
+        elbo = log_prob_zc_e + log_prob_y_zc + log_prob_zs_ye + log_prob_x_z + entropy_causal + entropy_spurious
         return -elbo.mean()
 
     def posterior_dist_causal(self, x, y_idx, e_idx, z_s):
