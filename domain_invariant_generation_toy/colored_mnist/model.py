@@ -8,14 +8,13 @@ from utils.nn_utils import MLP, arr_to_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr, n_anneal_epochs):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.lr = lr
-        self.n_anneal_epochs = n_anneal_epochs
         # q(z_c|x,y,e)
         self.encoder_mu_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * self.z_size)
         self.encoder_tril_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
@@ -54,24 +53,17 @@ class VAE(pl.LightningModule):
         z_c = self.sample_z(posterior_dist_causal)
         # E_q(zc,zs|x,y,e)[log p(x|zc,zs)]
         x_pred = self.decoder(torch.hstack((z_c, z_s)))
-        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
         y_pred = self.causal_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
-        # E_q(z_c|x,y,e)[log p(z_c|e)]
+        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+        # KL(q(z_c|x,y,e) || p(z_c|e)
         prior_dist_causal = self.prior_dist_causal(e_idx)
-        log_prob_zc_e = prior_dist_causal.log_prob(z_c)
-        # E_q(z_c|x,y,e)[log p(z_s|y,e)]
+        kl_causal = D.kl_divergence(posterior_dist_causal, prior_dist_causal).mean()
+        # KL(q(z_s|z_c,x,y,e) || p(z_s|y,e)
         prior_dist_spurious = self.prior_dist_spurious(y_idx, e_idx)
-        log_prob_zs_ye = prior_dist_spurious.log_prob(z_s)
-        # H(z_c|x,y,e)
-        entropy_causal = posterior_dist_causal.entropy()
-        # H(z_s|x,y,e)
-        entropy_spurious = posterior_dist_spurious.entropy()
-        anneal_mult = min(1, self.current_epoch / self.n_anneal_epochs)
-        elbo = log_prob_zc_e + log_prob_y_zc + log_prob_zs_ye + log_prob_x_z + anneal_mult * (entropy_causal +
-            entropy_spurious)
-        return -elbo.mean()
+        kl_spurious = D.kl_divergence(posterior_dist_spurious, prior_dist_spurious).mean()
+        return log_prob_x_z, log_prob_y_zc, kl_causal, kl_spurious
 
     def posterior_dist_causal(self, x, y_idx, e_idx, z_s):
         batch_size = len(x)
@@ -106,12 +98,17 @@ class VAE(pl.LightningModule):
         return D.MultivariateNormal(mu, scale_tril=tril)
 
     def training_step(self, batch, batch_idx):
-        loss = self.forward(*batch)
-        self.log('train_loss', loss, on_step=False, on_epoch=True)
+        log_prob_x_z, log_prob_y_zc, kl_causal, kl_spurious = self.forward(*batch)
+        loss = -log_prob_x_z - log_prob_y_zc + kl_causal + kl_spurious
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.forward(*batch)
+        log_prob_x_z, log_prob_y_zc, kl_causal, kl_spurious = self.forward(*batch)
+        loss = -log_prob_x_z - log_prob_y_zc + kl_causal + kl_spurious
+        self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+        self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+        self.log('val_kl_causal', kl_causal, on_step=False, on_epoch=True)
+        self.log('val_kl_spurious', kl_spurious, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
         return loss
 
