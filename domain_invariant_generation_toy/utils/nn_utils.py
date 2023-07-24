@@ -54,7 +54,7 @@ def n_tril_to_size(n_tril):
 
 def arr_to_scale_tril(arr):
     '''
-    Returns a lower triangular matrix with nonzero diagonal entries
+    Return a lower triangular matrix with nonzero diagonal entries
     '''
     batch_size, n_tri = arr.shape
     size = n_tril_to_size(n_tri)
@@ -63,3 +63,17 @@ def arr_to_scale_tril(arr):
     diag_idxs = torch.arange(size)
     cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
     return cov
+
+
+def scale_tril_to_cov(tril):
+    '''
+    Return a full covariance matrix
+    '''
+    return torch.bmm(tril, torch.transpose(tril, 1, 2))
+
+
+def arr_to_cov(arr):
+    '''
+    Return a full covariance matrix
+    '''
+    return scale_tril_to_cov(arr_to_scale_tril(arr))
