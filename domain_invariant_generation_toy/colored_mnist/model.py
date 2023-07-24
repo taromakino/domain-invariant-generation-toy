@@ -68,7 +68,7 @@ class VAE(pl.LightningModule):
         entropy_causal = posterior_dist_causal.entropy()
         # H(z_s|x,y,e)
         entropy_spurious = posterior_dist_spurious.entropy()
-        anneal_mult = max(1, self.current_epoch / self.n_anneal_epochs)
+        anneal_mult = min(1, self.current_epoch / self.n_anneal_epochs)
         elbo = log_prob_zc_e + log_prob_y_zc + log_prob_zs_ye + log_prob_x_z + anneal_mult * (entropy_causal +
             entropy_spurious)
         return -elbo.mean()
