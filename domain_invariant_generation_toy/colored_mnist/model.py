@@ -8,14 +8,14 @@ from utils.nn_utils import MLP, arr_to_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr, n_epochs):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr, n_anneal_epochs):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.lr = lr
-        self.n_epochs = n_epochs
+        self.n_anneal_epochs = n_anneal_epochs
         # q(z_c|x,y,e)
         self.encoder_mu_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * self.z_size)
         self.encoder_tril_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * size_to_n_tril(self.z_size))
@@ -68,7 +68,7 @@ class VAE(pl.LightningModule):
         entropy_causal = posterior_dist_causal.entropy()
         # H(z_s|x,y,e)
         entropy_spurious = posterior_dist_spurious.entropy()
-        anneal_mult = self.current_epoch / self.n_epochs
+        anneal_mult = max(1, self.current_epoch / self.n_anneal_epochs)
         elbo = log_prob_zc_e + log_prob_y_zc + log_prob_zs_ye + log_prob_x_z + anneal_mult * (entropy_causal +
             entropy_spurious)
         return -elbo.mean()
