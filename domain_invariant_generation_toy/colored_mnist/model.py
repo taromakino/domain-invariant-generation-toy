@@ -8,12 +8,13 @@ from utils.nn_utils import MLP, arr_to_tril, size_to_n_tril
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, classifier_mult, lr):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
+        self.classifier_mult = classifier_mult
         self.lr = lr
         # q(z_c|x,y,e)
         self.encoder_mu_causal = MLP(x_size + self.z_size, h_sizes, n_classes * n_envs * self.z_size)
@@ -99,7 +100,7 @@ class VAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         log_prob_x_z, log_prob_y_zc, kl_causal, kl_spurious = self.forward(*batch)
-        loss = -log_prob_x_z - log_prob_y_zc + kl_causal + kl_spurious
+        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl_causal + kl_spurious
         return loss
 
     def validation_step(self, batch, batch_idx):
