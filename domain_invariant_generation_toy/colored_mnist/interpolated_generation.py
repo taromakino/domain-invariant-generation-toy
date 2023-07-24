@@ -12,9 +12,9 @@ from utils.plot import plot_red_green_image
 
 def sample_prior(rng, vae, y_train, e_idx_train):
     idx = rng.choice(len(y_train), 1)
-    dist_causal = vae.prior_dist_causal(e_idx_train[idx])
-    dist_spurious = vae.prior_dist_spurious(y_train[idx], e_idx_train[idx])
-    return dist_causal.sample(), dist_spurious.sample()
+    prior_dist = vae.prior_dist(y_train[idx], e_idx_train[idx])
+    z_sample = prior_dist.sample()
+    return torch.chunk(z_sample, 2, dim=1)
 
 
 def main(args):
@@ -29,17 +29,16 @@ def main(args):
     e_idx_train = e_train.int()[:, 0]
     x_seed, y_idx_seed, e_idx_seed = x_train[[args.example_idx]], y_idx_train[[args.example_idx]], \
         e_idx_train[[args.example_idx]]
-    posterior_dist_spurious = vae.posterior_dist_spurious(x_seed, y_idx_seed, e_idx_seed)
-    zs_seed = posterior_dist_spurious.loc
-    posterior_dist_causal = vae.posterior_dist_causal(x_seed, y_idx_seed, e_idx_seed, zs_seed)
-    zc_seed = posterior_dist_causal.loc
+    posterior_dist_seed = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
+    z_seed = posterior_dist_seed.loc
+    zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     fig, axes = plt.subplots(2, args.n_cols)
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
     plot_red_green_image(axes[0, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 0], x_seed.reshape((2, 28, 28)).detach().numpy())
-    x_pred = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_seed))))
+    x_pred = torch.sigmoid(vae.decoder(z_seed))
     plot_red_green_image(axes[0, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     for col_idx in range(2, args.n_cols):

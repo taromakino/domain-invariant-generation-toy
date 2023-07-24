@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dims, output_dim, activation_class=nn.ReLU):
+    def __init__(self, input_dim, hidden_dims, output_dim, activation_class):
         super().__init__()
         module_list = []
         last_in_dim = input_dim
@@ -52,7 +52,7 @@ def n_tril_to_size(n_tril):
     return int((-1 + math.sqrt(1 + 8 * n_tril)) / 2)
 
 
-def arr_to_tril(arr):
+def arr_to_scale_tril(arr):
     '''
     Returns a lower triangular matrix with nonzero diagonal entries
     '''
