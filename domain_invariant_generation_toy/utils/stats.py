@@ -3,6 +3,10 @@ import torch
 import torch.distributions as D
 
 
+def min_max_scale(x):
+    return (x - x.min()) / (x.max() - x.min())
+
+
 def softplus(x):
     return np.log(1 + np.exp(x))
 

@@ -3,13 +3,10 @@ import os
 import pandas as pd
 import torch
 from utils.nn_utils import make_dataloader
+from utils.stats import min_max_scale
 
 
 PROB_SHAPE_E0 = [0.1, 0.6, 0.8]
-
-
-def min_max_scale(x):
-    return (x - x.min()) / (x.max() - x.min())
 
 
 def make_raw_data():
