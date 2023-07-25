@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import torch
 from utils.nn_utils import make_dataloader
+from utils.stats import min_max_scale
 
 
 PROB_SHAPE_E0 = [0.1, 0.6, 0.8]
@@ -33,6 +34,7 @@ def make_raw_data():
     e[idxs_env1] = 1
 
     y = images.sum(axis=1) / x_size
+    y = min_max_scale(y)
     y = rng.binomial(1, y, len(y))
 
     brightness = np.full(n_total, np.nan)
