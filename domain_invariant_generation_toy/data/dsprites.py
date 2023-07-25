@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import torch
 from utils.nn_utils import make_dataloader
-from utils.stats import min_max_scale
 
 
 PROB_SHAPE_E0 = [0.1, 0.6, 0.8]
@@ -18,47 +17,39 @@ def make_raw_data():
     orientation = factors.orientation.values
     idxs = np.where(orientation == 0)[0]
     images, factors = images[idxs], factors.iloc[idxs]
+    n_total, x_size = images.shape
 
     shapes = factors['shape'].values
     n_shapes = int(shapes.max())
-    idxs_env0, idxs_env1 = [], []
+    idxs_env0 = []
     for shape_idx in range(n_shapes):
         idxs = np.where(shapes == shape_idx + 1)[0]
         idxs_e0_elem = rng.choice(idxs, size=int(PROB_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
-        idxs_e1_elem = np.setdiff1d(idxs, idxs_e0_elem)
         idxs_env0.append(idxs_e0_elem)
-        idxs_env1.append(idxs_e1_elem)
     idxs_env0 = np.concatenate(idxs_env0)
-    idxs_env1 = np.concatenate(idxs_env1)
-
-    n_total, x_size = images.shape
-
-    y = images.sum(axis=1) / x_size
-    y += rng.normal(0, 0.01, size=len(y))
-    y = min_max_scale(y)
-
-    y_q1 = np.quantile(y, 0.25)
-    brightness_env0 = np.full(len(idxs_env0), np.nan)
-    brightness_env1 = np.full(len(idxs_env1), np.nan)
-    y_env0 = y[idxs_env0]
-    y_env1 = y[idxs_env1]
-
-    brightness_env0[y_env0 < y_q1] = rng.normal(0.25, 0.01, (y_env0 < y_q1).sum())
-    brightness_env0[y_env0 >= y_q1] = rng.normal(0.75, 0.01, (y_env0 >= y_q1).sum())
-    brightness_env1[y_env1 < y_q1] = rng.normal(0.75, 0.01, (y_env1 < y_q1).sum())
-    brightness_env1[y_env1 >= y_q1] = rng.normal(0.25, 0.01, (y_env1 >= y_q1).sum())
-    brightness = np.full_like(y, np.nan)
-    brightness[idxs_env0] = brightness_env0
-    brightness[idxs_env1] = brightness_env1
-
-    brightness = np.clip(brightness, 0, 1)[:, None]
-
-    images *= brightness
+    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
 
     e = np.zeros(n_total)
     e[idxs_env1] = 1
-    x, y, e = torch.tensor(images), torch.tensor(y), torch.tensor(e)
-    y, e = y[:, None].float(), e[:, None].float()
+
+    y = images.sum(axis=1) / x_size
+    y = rng.binomial(1, y, len(y))
+
+    brightness = np.full(n_total, np.nan)
+    idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
+    idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
+    brightness[idxs_y0_e0] = rng.normal(0.2, 0.01, len(idxs_y0_e0))
+    brightness[idxs_y0_e1] = rng.normal(0.4, 0.01, len(idxs_y0_e1))
+    brightness[idxs_y1_e0] = rng.normal(0.6, 0.01, len(idxs_y1_e0))
+    brightness[idxs_y1_e1] = rng.normal(0.8, 0.01, len(idxs_y1_e1))
+    brightness = np.clip(brightness, 0, 1)[:, None]
+
+    x = images * brightness
+
+    x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
+    x, y, e = x.float(), y[:, None].float(), e[:, None].float()
     return e, shapes, y, brightness, x
 
 

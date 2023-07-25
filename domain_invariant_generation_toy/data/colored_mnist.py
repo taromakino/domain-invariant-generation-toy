@@ -21,6 +21,7 @@ def make_raw_data():
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
     n_total = len(images)
+
     idxs_env0 = []
     zero_idxs = np.where(digits == 0)[0]
     one_idxs = np.where(digits == 1)[0]

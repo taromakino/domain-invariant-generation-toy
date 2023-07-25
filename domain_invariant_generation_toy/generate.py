@@ -4,12 +4,11 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from argparse import ArgumentParser
-from colored_mnist.data import make_data
-from colored_mnist.model import VAE
+from data import MAKE_DATA, PLOT, IMAGE_SIZE
 from torch.optim import Adam
 from utils.file import load_file
-from utils.plot import plot_red_green_image
 from utils.stats import multivariate_normal
+from vae import VAE
 
 
 def log_prob_yzc(vae, p_zc, y, zc):
@@ -21,7 +20,7 @@ def log_prob_yzc(vae, p_zc, y, zc):
 def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val = make_data(existing_args.train_ratio, existing_args.batch_size, 1)
+    data_train, data_val = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size, 1)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     vae.freeze()
@@ -37,9 +36,11 @@ def main(args):
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
-    plot_red_green_image(axes[0], x_seed.reshape((2, 28, 28)).detach().numpy())
+    plot = PLOT[existing_args.dataset]
+    image_size = IMAGE_SIZE[existing_args.dataset]
+    plot(axes[0], x_seed.reshape(image_size).detach().numpy())
     x_pred = torch.sigmoid(vae.decoder(z_seed))
-    plot_red_green_image(axes[1], x_pred.reshape((2, 28, 28)).detach().numpy())
+    plot(axes[1], x_pred.reshape(image_size).detach().numpy())
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     zc_perturb = zc_seed.clone().requires_grad_()
     optimizer = Adam([zc_perturb], lr=args.lr)
@@ -51,7 +52,7 @@ def main(args):
             optimizer.step()
         print(loss)
         x_perturb = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
-        plot_red_green_image(axes[col_idx], x_perturb.reshape((2, 28, 28)).detach().numpy())
+        plot(axes[col_idx], x_perturb.reshape(image_size).detach().numpy())
     fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate')
     os.makedirs(fig_dpath, exist_ok=True)
     plt.savefig(os.path.join(fig_dpath, f'{args.example_idx}.png'))
