@@ -57,7 +57,8 @@ class VAE(pl.LightningModule):
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior_dist(y_idx, e_idx)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        return log_prob_x_z, log_prob_y_zc, kl
+        prior_reg = self.prior_reg(prior_dist).mean()
+        return log_prob_x_z, log_prob_y_zc, kl, prior_reg
 
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
@@ -89,12 +90,12 @@ class VAE(pl.LightningModule):
         return D.kl_divergence(prior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl = self.forward(*batch)
-        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl
+        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
+        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.prior_reg_mult * prior_reg
         return loss
 
     def validation_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl = self.forward(*batch)
+        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
         loss = -log_prob_x_z - log_prob_y_zc + kl
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
