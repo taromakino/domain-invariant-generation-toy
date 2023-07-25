@@ -43,13 +43,13 @@ def main(args):
     plot_red_green_image(axes[1, 1], x_pred.reshape((2, 28, 28)).detach().numpy())
     for col_idx in range(2, args.n_cols):
         zc_sample, zs_sample = sample_prior(rng, vae, y_idx_train, e_idx_train)
-        zc_perturb = args.alpha * zc_sample + (1 - args.alpha) * zc_seed
-        zs_perturb = args.alpha * zs_sample + (1 - args.alpha) * zs_seed
-        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
-        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_perturb))))
+        x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_sample, zs_seed))))
+        x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_sample))))
         plot_red_green_image(axes[0, col_idx], x_pred_causal.reshape((2, 28, 28)).detach().numpy())
         plot_red_green_image(axes[1, col_idx], x_pred_spurious.reshape((2, 28, 28)).detach().numpy())
-    plt.show(block=True)
+    fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate_from_prior')
+    os.makedirs(fig_dpath, exist_ok=True)
+    plt.savefig(os.path.join(fig_dpath, f'{args.example_idx}.png'))
 
 
 if __name__ == '__main__':
@@ -58,5 +58,4 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--n_cols', type=int, default=10)
     parser.add_argument('--example_idx', type=int, default=0)
-    parser.add_argument('--alpha', type=float, default=1)
     main(parser.parse_args())

@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import os
 import pytorch_lightning as pl
 import torch
-import torch.distributions as D
 import torch.nn.functional as F
 from argparse import ArgumentParser
 from colored_mnist.data import make_data
@@ -10,18 +9,13 @@ from colored_mnist.model import VAE
 from torch.optim import Adam
 from utils.file import load_file
 from utils.plot import plot_red_green_image
-
-
-def multivariate_normal(z):
-    z_mu = z.mean(dim=0)
-    z_cov = torch.cov(torch.swapaxes(z, 0, 1))
-    return D.MultivariateNormal(z_mu, z_cov)
+from utils.stats import multivariate_normal
 
 
 def log_prob_yzc(vae, p_zc, y, zc):
     y_pred = vae.causal_classifier(zc)
-    log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
-    return log_prob_y_zc + p_zc.log_prob(zc)
+    log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+    return log_prob_y_zc + p_zc.log_prob(zc).mean()
 
 
 def main(args):
@@ -49,18 +43,18 @@ def main(args):
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
     zc_perturb = zc_seed.clone().requires_grad_()
     optimizer = Adam([zc_perturb], lr=args.lr)
-    step = 0
     for col_idx in range(2, args.n_cols):
         for _ in range(args.n_steps_per_col):
             optimizer.zero_grad()
             loss = -log_prob_yzc(vae, p_zc, 1 - y_seed, zc_perturb)
             loss.backward()
             optimizer.step()
-            step += 1
         print(loss)
         x_perturb = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
         plot_red_green_image(axes[col_idx], x_perturb.reshape((2, 28, 28)).detach().numpy())
-    plt.show(block=True)
+    fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate')
+    os.makedirs(fig_dpath, exist_ok=True)
+    plt.savefig(os.path.join(fig_dpath, f'{args.example_idx}.png'))
 
 
 if __name__ == '__main__':
