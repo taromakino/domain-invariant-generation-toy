@@ -6,20 +6,6 @@ from utils.nn_utils import make_dataloader
 from utils.stats import min_max_scale
 
 
-PROB_SCALE_ENV0 = {
-    0.5: 0.25,
-    0.6: 1,
-    0.7: 0.25
-}
-
-
-PROB_SCALE_ENV1 = {
-    0.8: 0.25,
-    0.9: 1,
-    1.0: 0.25
-}
-
-
 def make_raw_data():
     rng = np.random.RandomState(0)
     data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
@@ -29,23 +15,12 @@ def make_raw_data():
     # No rotation, square only
     idxs = np.where((factors.orientation == 0) & (factors['shape'] == 1))[0]
     images, factors = images[idxs], factors.iloc[idxs]
-
-    # Assumes the dictionaries' keys do not overlap
-    idxs_env0, idxs_env1 = [], []
-    for value, prob in PROB_SCALE_ENV0.items():
-        subset_idxs = np.where(factors.scale == value)[0]
-        subset_idxs = rng.choice(subset_idxs, int(prob * len(subset_idxs)), replace=False)
-        idxs_env0.append(subset_idxs)
-    for value, prob in PROB_SCALE_ENV1.items():
-        subset_idxs = np.where(factors.scale == value)[0]
-        subset_idxs = rng.choice(subset_idxs, int(prob * len(subset_idxs)), replace=False)
-        idxs_env1.append(subset_idxs)
-    idxs_env0, idxs_env1 = np.concatenate(idxs_env0), np.concatenate(idxs_env1)
-    idxs = np.concatenate((idxs_env0, idxs_env1))
-    images, factors = images[idxs], factors.iloc[idxs]
     n_total, x_size = images.shape
 
-    e = np.concatenate((np.zeros(len(idxs_env0)), np.ones(len(idxs_env1))))
+    idxs_env1 = rng.choice(np.arange(n_total), int(0.5 * n_total), replace=False)
+
+    e = np.zeros(n_total)
+    e[idxs_env1] = 1
 
     y = images.sum(axis=1) / x_size
     y = min_max_scale(y)
