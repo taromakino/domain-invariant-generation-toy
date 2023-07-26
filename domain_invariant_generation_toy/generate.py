@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from argparse import ArgumentParser
-from data import MAKE_DATA, PLOT, IMAGE_SIZE
+from data import MAKE_DATA, PLOT, IMAGE_SHAPE
 from torch.optim import Adam
 from utils.file import load_file
 from utils.stats import multivariate_normal
@@ -37,7 +37,7 @@ def main(args):
         ax.set_xticks([])
         ax.set_yticks([])
     plot = PLOT[existing_args.dataset]
-    image_size = IMAGE_SIZE[existing_args.dataset]
+    image_size = IMAGE_SHAPE[existing_args.dataset]
     plot(axes[0], x_seed.reshape(image_size).detach().numpy())
     x_pred = torch.sigmoid(vae.decoder(z_seed))
     plot(axes[1], x_pred.reshape(image_size).detach().numpy())

@@ -6,27 +6,32 @@ from utils.nn_utils import make_dataloader
 from utils.stats import min_max_scale
 
 
+N_TOTAL = 10000
+WIDTH_LB = 8
+WIDTH_UB = 32
+IMAGE_SIZE = 128
+
+
 def make_raw_data():
     rng = np.random.RandomState(0)
-    data = np.load(os.path.join(os.environ['DATA_DPATH'], 'dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz'))
-    images = data['imgs'].astype('float32')
-    images = images.reshape(len(images), -1)
-    factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
-    # No rotation, square only
-    idxs = np.where((factors.orientation == 0) & (factors['shape'] == 1))[0]
-    images, factors = images[idxs], factors.iloc[idxs]
-    n_total, x_size = images.shape
+    idxs_env0 = rng.choice(np.arange(N_TOTAL), N_TOTAL // 2, replace=False)
+    idxs_env1 = np.setdiff1d(np.arange(N_TOTAL), idxs_env0)
 
-    idxs_env1 = rng.choice(np.arange(n_total), int(0.5 * n_total), replace=False)
-
-    e = np.zeros(n_total)
+    e = np.zeros(N_TOTAL)
     e[idxs_env1] = 1
 
-    y = images.sum(axis=1) / x_size
+    width = np.full(N_TOTAL, np.nan)
+    width[idxs_env0] = (rng.normal(16, 3, len(idxs_env0))).astype(int)
+    width[idxs_env1] = (rng.normal(24, 3, len(idxs_env1))).astype(int)
+    width = width + width % 2
+    width = np.clip(width, WIDTH_LB, WIDTH_UB)
+
+    y = width ** 2
     y = min_max_scale(y)
+
     y = rng.binomial(1, y, len(y))
 
-    brightness = np.full(n_total, np.nan)
+    brightness = np.full(N_TOTAL, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
@@ -37,11 +42,21 @@ def make_raw_data():
     brightness[idxs_y1_e1] = rng.normal(0.9, 0.01, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
-    x = images * brightness
+    center_x = rng.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TOTAL)
+    center_y = rng.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TOTAL)
 
+    x = np.zeros((N_TOTAL, IMAGE_SIZE, IMAGE_SIZE))
+    for idx in range(N_TOTAL):
+        half_width = width[idx] // 2
+        x_lb = int(center_x[idx] - half_width)
+        x_ub = int(center_x[idx] + half_width)
+        y_lb = int(center_y[idx] - half_width)
+        y_ub = int(center_y[idx] + half_width)
+        x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
+    x = x.reshape(len(x), -1)
     x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
     x, y, e = x.float(), y[:, None].float(), e[:, None].float()
-    return e, factors.scale.values, y, brightness, x
+    return e, width, y, brightness, x
 
 
 def make_data(train_ratio, batch_size, n_workers):

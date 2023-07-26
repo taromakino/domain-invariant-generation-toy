@@ -15,7 +15,7 @@ PLOT = {
 }
 
 
-IMAGE_SIZE = {
+IMAGE_SHAPE = {
     'colored_mnist': (2, 28, 28),
     'dsprites': (64, 64)
 }
