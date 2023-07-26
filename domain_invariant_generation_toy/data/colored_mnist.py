@@ -61,7 +61,7 @@ def make_data(train_ratio, batch_size, n_workers):
     e, digits, y, colors, x = make_raw_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
-    train_idxs = rng.choice(n_total, n_train, replace=False)
+    train_idxs = rng.choice(np.arange(n_total), n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
     x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
