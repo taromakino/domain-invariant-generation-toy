@@ -16,7 +16,6 @@ class MLP(nn.Module):
         for hidden_dim in hidden_dims:
             module_list.append(nn.Linear(last_in_dim, hidden_dim))
             module_list.append(activation_class())
-            module_list.append(nn.BatchNorm1d(hidden_dim))
             last_in_dim = hidden_dim
         module_list.append(nn.Linear(last_in_dim, output_dim))
         self.module_list = nn.Sequential(*module_list)

@@ -6,7 +6,18 @@ from utils.nn_utils import make_dataloader
 from utils.stats import min_max_scale
 
 
-PROB_SHAPE_E0 = [0.1, 0.6, 0.8]
+PROB_SCALE_ENV0 = {
+    0.5: 0.25,
+    0.6: 1,
+    0.7: 0.25
+}
+
+
+PROB_SCALE_ENV1 = {
+    0.8: 0.25,
+    0.9: 1,
+    1.0: 0.25
+}
 
 
 def make_raw_data():
@@ -15,23 +26,25 @@ def make_raw_data():
     images = data['imgs'].astype('float32')
     images = images.reshape(len(images), -1)
     factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
-    orientation = factors.orientation.values
-    idxs = np.where(orientation == 0)[0]
+    idxs = np.where(factors['shape'] == 1)[0]
+    images, factors = images[idxs], factors.iloc[idxs]
+
+    # Assumes the dictionaries' keys do not overlap
+    idxs_env0, idxs_env1 = [], []
+    for value, prob in PROB_SCALE_ENV0.items():
+        subset_idxs = np.where(factors.scale == value)[0]
+        subset_idxs = rng.choice(subset_idxs, int(prob * len(subset_idxs)), replace=False)
+        idxs_env0.append(subset_idxs)
+    for value, prob in PROB_SCALE_ENV1.items():
+        subset_idxs = np.where(factors.scale == value)[0]
+        subset_idxs = rng.choice(subset_idxs, int(prob * len(subset_idxs)), replace=False)
+        idxs_env1.append(subset_idxs)
+    idxs_env0, idxs_env1 = np.concatenate(idxs_env0), np.concatenate(idxs_env1)
+    idxs = np.concatenate((idxs_env0, idxs_env1))
     images, factors = images[idxs], factors.iloc[idxs]
     n_total, x_size = images.shape
 
-    shapes = factors['shape'].values
-    n_shapes = int(shapes.max())
-    idxs_env0 = []
-    for shape_idx in range(n_shapes):
-        idxs = np.where(shapes == shape_idx + 1)[0]
-        idxs_e0_elem = rng.choice(idxs, size=int(PROB_SHAPE_E0[shape_idx] * len(idxs)), replace=False)
-        idxs_env0.append(idxs_e0_elem)
-    idxs_env0 = np.concatenate(idxs_env0)
-    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
-
-    e = np.zeros(n_total)
-    e[idxs_env1] = 1
+    e = np.concatenate((np.zeros(len(idxs_env0)), np.ones(len(idxs_env1))))
 
     y = images.sum(axis=1) / x_size
     y = min_max_scale(y)
@@ -52,12 +65,12 @@ def make_raw_data():
 
     x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
     x, y, e = x.float(), y[:, None].float(), e[:, None].float()
-    return e, shapes, y, brightness, x
+    return e, factors.scale.values, y, brightness, x
 
 
 def make_data(train_ratio, batch_size, n_workers):
     rng = np.random.RandomState(0)
-    e, shapes, y, brightness, x = make_raw_data()
+    e, scale, y, brightness, x = make_raw_data()
     n_total = len(x)
     n_train = int(train_ratio * n_total)
     train_idxs = rng.choice(n_total, n_train, replace=False)
