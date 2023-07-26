@@ -26,7 +26,8 @@ def make_raw_data():
     images = data['imgs'].astype('float32')
     images = images.reshape(len(images), -1)
     factors = pd.DataFrame(data['latents_values'], columns=['color', 'shape', 'scale', 'orientation', 'pos_x', 'pos_y'])
-    idxs = np.where(factors['shape'] == 1)[0]
+    # No rotation, square only
+    idxs = np.where((factors.orientation == 0) & (factors['shape'] == 1))[0]
     images, factors = images[idxs], factors.iloc[idxs]
 
     # Assumes the dictionaries' keys do not overlap
@@ -55,10 +56,10 @@ def make_raw_data():
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    brightness[idxs_y0_e0] = rng.normal(0.9, 0.01, len(idxs_y0_e0))
+    brightness[idxs_y0_e0] = rng.normal(0.3, 0.01, len(idxs_y0_e0))
     brightness[idxs_y0_e1] = rng.normal(0.7, 0.01, len(idxs_y0_e1))
     brightness[idxs_y1_e0] = rng.normal(0.5, 0.01, len(idxs_y1_e0))
-    brightness[idxs_y1_e1] = rng.normal(0.3, 0.01, len(idxs_y1_e1))
+    brightness[idxs_y1_e1] = rng.normal(0.9, 0.01, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
     x = images * brightness
