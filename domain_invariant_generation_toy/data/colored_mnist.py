@@ -16,7 +16,7 @@ def flip_binary(rng, x, flip_prob):
 
 
 def make_raw_data():
-    rng = np.random.RandomState(0)
+    rng = np.random.RandomState()
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
@@ -57,7 +57,7 @@ def make_raw_data():
 
 
 def make_data(train_ratio, batch_size, n_workers):
-    rng = np.random.RandomState(0)
+    rng = np.random.RandomState()
     e, digits, y, colors, x = make_raw_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)

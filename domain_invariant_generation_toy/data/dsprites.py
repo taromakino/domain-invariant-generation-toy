@@ -13,7 +13,7 @@ IMAGE_SIZE = 128
 
 
 def make_raw_data():
-    rng = np.random.RandomState(0)
+    rng = np.random.RandomState()
     idxs_env0 = rng.choice(np.arange(N_TOTAL), N_TOTAL // 2, replace=False)
     idxs_env1 = np.setdiff1d(np.arange(N_TOTAL), idxs_env0)
 
@@ -60,7 +60,7 @@ def make_raw_data():
 
 
 def make_data(train_ratio, batch_size, n_workers):
-    rng = np.random.RandomState(0)
+    rng = np.random.RandomState()
     e, scale, y, brightness, x = make_raw_data()
     n_total = len(x)
     n_train = int(train_ratio * n_total)
