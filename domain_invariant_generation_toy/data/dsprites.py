@@ -42,10 +42,10 @@ def make_raw_data():
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    brightness[idxs_y0_e0] = rng.normal(0.2, 0.01, len(idxs_y0_e0))
-    brightness[idxs_y0_e1] = rng.normal(0.4, 0.01, len(idxs_y0_e1))
-    brightness[idxs_y1_e0] = rng.normal(0.6, 0.01, len(idxs_y1_e0))
-    brightness[idxs_y1_e1] = rng.normal(0.8, 0.01, len(idxs_y1_e1))
+    brightness[idxs_y0_e0] = rng.normal(0.9, 0.01, len(idxs_y0_e0))
+    brightness[idxs_y0_e1] = rng.normal(0.7, 0.01, len(idxs_y0_e1))
+    brightness[idxs_y1_e0] = rng.normal(0.5, 0.01, len(idxs_y1_e0))
+    brightness[idxs_y1_e1] = rng.normal(0.3, 0.01, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
     x = images * brightness
