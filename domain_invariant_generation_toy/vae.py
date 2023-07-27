@@ -92,7 +92,7 @@ class VAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         log_prob_x_z, log_prob_y_zc, log_prob_prior, entropy_posterior, posterior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - log_prob_y_zc - self.prior_likelihood_mult * log_prob_prior + entropy_posterior + \
+        loss = -log_prob_x_z - log_prob_y_zc - self.prior_likelihood_mult * log_prob_prior - entropy_posterior + \
             self.posterior_reg_mult * posterior_reg
         return loss
 
