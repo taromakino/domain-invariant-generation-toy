@@ -8,13 +8,13 @@ from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, classifier_mult, posterior_reg_mult, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, prior_likelihood_mult, posterior_reg_mult, lr):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
-        self.classifier_mult = classifier_mult
+        self.prior_likelihood_mult = prior_likelihood_mult
         self.posterior_reg_mult = posterior_reg_mult
         self.lr = lr
         # q(z_c|x,y,e)
@@ -56,9 +56,10 @@ class VAE(pl.LightningModule):
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior_dist(y_idx, e_idx)
-        kl = D.kl_divergence(posterior_dist, prior_dist).mean()
+        log_prob_prior = prior_dist.log_prob(z).mean()
+        entropy_posterior = posterior_dist.entropy().mean()
         posterior_reg = self.posterior_reg(posterior_dist).mean()
-        return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
+        return log_prob_x_z, log_prob_y_zc, log_prob_prior, entropy_posterior, posterior_reg
 
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
@@ -90,16 +91,18 @@ class VAE(pl.LightningModule):
         return D.kl_divergence(posterior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+        log_prob_x_z, log_prob_y_zc, log_prob_prior, entropy_posterior, posterior_reg = self.forward(*batch)
+        loss = -log_prob_x_z - log_prob_y_zc - self.prior_likelihood_mult * log_prob_prior + entropy_posterior + \
+            self.posterior_reg_mult * posterior_reg
         return loss
 
     def validation_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - log_prob_y_zc + kl
+        log_prob_x_z, log_prob_y_zc, log_prob_prior, entropy_posterior, posterior_reg = self.forward(*batch)
+        loss = -log_prob_x_z - log_prob_y_zc - log_prob_prior
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-        self.log('val_kl', kl, on_step=False, on_epoch=True)
+        self.log('val_log_prob_prior', log_prob_prior, on_step=False, on_epoch=True)
+        self.log('val_entropy_posterior', entropy_posterior, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
