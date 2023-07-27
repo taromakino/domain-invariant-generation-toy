@@ -31,7 +31,7 @@ def main(args):
     posterior_dist_seed = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
     z_seed = posterior_dist_seed.loc
     zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
-    fig, axes = plt.subplots(2, args.n_cols)
+    fig, axes = plt.subplots(2, args.n_cols, figsize=(2 * args.n_cols, 2 * 2))
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])

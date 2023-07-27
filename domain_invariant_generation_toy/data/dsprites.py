@@ -9,7 +9,7 @@ RNG = np.random.RandomState(0)
 N_TOTAL = 10000
 WIDTH_LB = 8
 WIDTH_UB = 32
-IMAGE_SIZE = 128
+IMAGE_SIZE = 64
 
 
 def make_raw_data():
@@ -20,9 +20,8 @@ def make_raw_data():
     e[idxs_env1] = 1
 
     width = np.full(N_TOTAL, np.nan)
-    width[idxs_env0] = (RNG.normal(18, 3, len(idxs_env0))).astype(int)
-    width[idxs_env1] = (RNG.normal(22, 3, len(idxs_env1))).astype(int)
-    width = width + width % 2
+    width[idxs_env0] = (RNG.normal(20, 6, len(idxs_env0))).astype(int)
+    width[idxs_env1] = (RNG.normal(28, 2, len(idxs_env1))).astype(int)
     width = np.clip(width, WIDTH_LB, WIDTH_UB)
 
     y = min_max_scale(width)
@@ -44,11 +43,12 @@ def make_raw_data():
 
     x = np.zeros((N_TOTAL, IMAGE_SIZE, IMAGE_SIZE))
     for idx in range(N_TOTAL):
-        half_width = width[idx] // 2
-        x_lb = int(center_x[idx] - half_width)
-        x_ub = int(center_x[idx] + half_width)
-        y_lb = int(center_y[idx] - half_width)
-        y_ub = int(center_y[idx] + half_width)
+        half_width_floor = np.floor(width[idx] / 2)
+        half_width_ceil = np.ceil(width[idx] / 2)
+        x_lb = int(center_x[idx] - half_width_floor)
+        x_ub = int(center_x[idx] + half_width_ceil)
+        y_lb = int(center_y[idx] - half_width_floor)
+        y_ub = int(center_y[idx] + half_width_ceil)
         x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
     x = x.reshape(len(x), -1)
     x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)

@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import torch
@@ -67,3 +68,49 @@ def make_data(train_ratio, batch_size, n_workers):
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
     data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
     return data_train, data_val
+
+
+def main():
+    e, digits, y, colors, x = make_raw_data()
+    e, y, colors = e.squeeze(), y.squeeze(), colors.squeeze()
+    fig, axes = plt.subplots(1, 2, figsize=(6, 3))
+    axes[0].hist(digits[e == 0])
+    axes[1].hist(digits[e == 1])
+    axes[0].set_title('p(digit|e=0)')
+    axes[1].set_title('p(digit|e=1)')
+    fig.suptitle('Assumed Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    axes[0].hist(colors[(y == 0) & (e == 0)])
+    axes[1].hist(colors[(y == 0) & (e == 1)])
+    axes[2].hist(colors[(y == 1) & (e == 0)])
+    axes[3].hist(colors[(y == 1) & (e == 1)])
+    axes[0].set_title('p(color|y=0,e=0)')
+    axes[1].set_title('p(color|y=0,e=1)')
+    axes[2].set_title('p(color|y=1,e=0)')
+    axes[3].set_title('p(color|y=1,e=1)')
+    fig.suptitle('Assumed Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    axes[0].hist(digits[(y == 0) & (e == 0)])
+    axes[1].hist(digits[(y == 0) & (e == 1)])
+    axes[2].hist(digits[(y == 1) & (e == 0)])
+    axes[3].hist(digits[(y == 1) & (e == 1)])
+    axes[0].set_title('p(digit|y=0,e=0)')
+    axes[1].set_title('p(digit|y=0,e=1)')
+    axes[2].set_title('p(digit|y=1,e=0)')
+    axes[3].set_title('p(digit|y=1,e=1)')
+    fig.suptitle('Assumed Non-Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 2, figsize=(6, 3))
+    axes[0].hist(colors[e == 0])
+    axes[1].hist(colors[e == 1])
+    axes[0].set_title('p(color|e=0)')
+    axes[1].set_title('p(color|e=1)')
+    fig.suptitle('Assumed Non-Gaussian')
+    fig.tight_layout()
+    plt.show(block=True)
+
+
+if __name__ == '__main__':
+    main()

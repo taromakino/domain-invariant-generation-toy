@@ -38,7 +38,7 @@ def main(args):
         y_objective = torch.ones_like(y_seed)
     else:
         raise ValueError
-    fig, axes = plt.subplots(1, args.n_cols)
+    fig, axes = plt.subplots(1, args.n_cols, figsize=(2 * args.n_cols, 2))
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
