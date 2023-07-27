@@ -8,12 +8,14 @@ from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, prior_likelihood_mult, posterior_reg_mult, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, n_samples, prior_likelihood_mult, posterior_reg_mult,
+            lr):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
+        self.n_samples = n_samples
         self.prior_likelihood_mult = prior_likelihood_mult
         self.posterior_reg_mult = posterior_reg_mult
         self.lr = lr
@@ -35,6 +37,12 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
 
+    def repeat_samples(self, x):
+        batch_size, other_size = x.shape[0], x.shape[1:]
+        expanded_shape = (self.n_samples, batch_size,) + other_size
+        x = x.expand(*expanded_shape)
+        return x.reshape(self.n_samples * batch_size, *other_size)
+
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
         batch_size, z_size = mu.shape
@@ -42,6 +50,7 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
+        x, y, e = self.repeat_samples(x), self.repeat_samples(y), self.repeat_samples(e)
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
