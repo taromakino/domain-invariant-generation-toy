@@ -14,7 +14,7 @@ from vae import VAE
 def log_prob_yzc(vae, p_zc, y, zc):
     y_pred = vae.causal_classifier(zc)
     log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-    return log_prob_y_zc + p_zc.log_prob(zc).mean()
+    return vae.classifier_mult * log_prob_y_zc + p_zc.log_prob(zc).mean()
 
 
 def main(args):
@@ -32,6 +32,12 @@ def main(args):
     zc, zs = torch.chunk(z, 2, dim=1)
     p_zc = multivariate_normal(zc)
     x_seed, y_seed, z_seed = x[[args.example_idx]], y[[args.example_idx]], z[[args.example_idx]]
+    if existing_args.dataset == 'colored_mnist':
+        y_objective = 1 - y_seed
+    elif existing_args.dataset == 'dsprites':
+        y_objective = torch.ones_like(y_seed)
+    else:
+        raise ValueError
     fig, axes = plt.subplots(1, args.n_cols)
     for ax in axes.flatten():
         ax.set_xticks([])
@@ -47,7 +53,7 @@ def main(args):
     for col_idx in range(2, args.n_cols):
         for _ in range(args.n_steps_per_col):
             optimizer.zero_grad()
-            loss = -log_prob_yzc(vae, p_zc, 1 - y_seed, zc_perturb)
+            loss = -log_prob_yzc(vae, p_zc, y_objective, zc_perturb)
             loss.backward()
             optimizer.step()
         print(loss)

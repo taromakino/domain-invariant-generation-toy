@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from utils.nn_utils import make_dataloader
@@ -66,3 +67,49 @@ def make_data(train_ratio, batch_size, n_workers):
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
     data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
     return data_train, data_val
+
+
+def main():
+    e, width, y, brightness, x = make_raw_data()
+    e, y, brightness = e.squeeze(), y.squeeze(), brightness.squeeze()
+    fig, axes = plt.subplots(1, 2, figsize=(6, 3))
+    axes[0].hist(width[e == 0])
+    axes[1].hist(width[e == 1])
+    axes[0].set_title('p(width|e=0)')
+    axes[1].set_title('p(width|e=1)')
+    fig.suptitle('Assumed Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    axes[0].hist(brightness[(y == 0) & (e == 0)])
+    axes[1].hist(brightness[(y == 0) & (e == 1)])
+    axes[2].hist(brightness[(y == 1) & (e == 0)])
+    axes[3].hist(brightness[(y == 1) & (e == 1)])
+    axes[0].set_title('p(brightness|y=0,e=0)')
+    axes[1].set_title('p(brightness|y=0,e=1)')
+    axes[2].set_title('p(brightness|y=1,e=0)')
+    axes[3].set_title('p(brightness|y=1,e=1)')
+    fig.suptitle('Assumed Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    axes[0].hist(width[(y == 0) & (e == 0)])
+    axes[1].hist(width[(y == 0) & (e == 1)])
+    axes[2].hist(width[(y == 1) & (e == 0)])
+    axes[3].hist(width[(y == 1) & (e == 1)])
+    axes[0].set_title('p(width|y=0,e=0)')
+    axes[1].set_title('p(width|y=0,e=1)')
+    axes[2].set_title('p(width|y=1,e=0)')
+    axes[3].set_title('p(width|y=1,e=1)')
+    fig.suptitle('Assumed Non-Gaussian')
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 2, figsize=(6, 3))
+    axes[0].hist(brightness[e == 0])
+    axes[1].hist(brightness[e == 1])
+    axes[0].set_title('p(brightness|e=0)')
+    axes[1].set_title('p(brightness|e=1)')
+    fig.suptitle('Assumed Non-Gaussian')
+    fig.tight_layout()
+    plt.show(block=True)
+
+
+if __name__ == '__main__':
+    main()
