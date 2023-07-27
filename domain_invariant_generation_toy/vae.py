@@ -98,7 +98,7 @@ class VAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         log_prob_x_z, log_prob_y_zc, log_prob_prior, entropy_posterior, posterior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - log_prob_y_zc - log_prob_prior
+        loss = -log_prob_x_z - log_prob_y_zc - log_prob_prior - entropy_posterior
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_log_prob_prior', log_prob_prior, on_step=False, on_epoch=True)
