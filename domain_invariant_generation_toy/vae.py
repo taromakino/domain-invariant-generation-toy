@@ -8,14 +8,14 @@ from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, classifier_mult, prior_reg_mult, lr):
+    def __init__(self, x_size, z_size, h_sizes, n_classes, n_envs, classifier_mult, posterior_reg_mult, lr):
         super().__init__()
         self.save_hyperparameters()
         self.z_size = z_size
         self.n_classes = n_classes
         self.n_envs = n_envs
         self.classifier_mult = classifier_mult
-        self.prior_reg_mult = prior_reg_mult
+        self.posterior_reg_mult = posterior_reg_mult
         self.lr = lr
         # q(z_c|x,y,e)
         self.encoder_mu = MLP(x_size, h_sizes, n_classes * n_envs * 2 * self.z_size, nn.ReLU)
@@ -57,8 +57,8 @@ class VAE(pl.LightningModule):
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior_dist(y_idx, e_idx)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        prior_reg = self.prior_reg(prior_dist).mean()
-        return log_prob_x_z, log_prob_y_zc, kl, prior_reg
+        posterior_reg = self.posterior_reg(posterior_dist).mean()
+        return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
 
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
@@ -82,16 +82,16 @@ class VAE(pl.LightningModule):
         prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         return D.MultivariateNormal(prior_mu, prior_cov)
 
-    def prior_reg(self, prior_dist):
-        batch_size = len(prior_dist.loc)
-        mu = torch.zeros_like(prior_dist.loc).to(self.device)
+    def posterior_reg(self, posterior_dist):
+        batch_size = len(posterior_dist.loc)
+        mu = torch.zeros_like(posterior_dist.loc).to(self.device)
         cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         standard_normal = D.MultivariateNormal(mu, cov)
-        return D.kl_divergence(prior_dist, standard_normal)
+        return D.kl_divergence(posterior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.prior_reg_mult * prior_reg
+        log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
+        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
         return loss
 
     def validation_step(self, batch, batch_idx):
