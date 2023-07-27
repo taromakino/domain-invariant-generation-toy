@@ -63,10 +63,10 @@ class VAE(pl.LightningModule):
     def posterior_dist(self, x, e_idx):
         batch_size = len(x)
         posterior_mu = self.encoder_mu(x)
-        posterior_mu = posterior_mu.reshape(batch_size, self.n_classes, self.n_envs, 2 * self.z_size)
+        posterior_mu = posterior_mu.reshape(batch_size, self.n_envs, 2 * self.z_size)
         posterior_mu = posterior_mu[torch.arange(batch_size), e_idx, :]
         posterior_cov = self.encoder_cov(x)
-        posterior_cov = posterior_cov.reshape(batch_size, self.n_classes, self.n_envs, size_to_n_tril(2 * self.z_size))
+        posterior_cov = posterior_cov.reshape(batch_size, self.n_envs, size_to_n_tril(2 * self.z_size))
         posterior_cov = arr_to_scale_tril(posterior_cov[torch.arange(batch_size), e_idx, :])
         return D.MultivariateNormal(posterior_mu, scale_tril=posterior_cov)
 
