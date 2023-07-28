@@ -14,8 +14,7 @@ def main(args):
     x_train, y_train, e_train = data_train.dataset[:]
     n_classes = int(y_train.max() + 1)
     n_envs = int(e_train.max() + 1)
-    vae = VAE(x_train.shape[1], args.z_size, args.h_sizes, n_classes, n_envs, args.n_samples, args.prior_likelihood_mult,
-        args.posterior_reg_mult,  args.lr)
+    vae = VAE(x_train.shape[1], args.z_size, args.h_sizes, n_classes, n_envs, args.beta, args.posterior_reg_mult, args.lr)
     vae_trainer = make_trainer(args.dpath, args.seed, args.n_epochs, args.early_stop_ratio)
     vae_trainer.fit(vae, data_train, data_val)
 
@@ -27,12 +26,11 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
-    parser.add_argument('--n_samples', type=int, default=500)
-    parser.add_argument('--prior_likelihood_mult', type=float, default=1)
+    parser.add_argument('--beta', type=float, default=1)
     parser.add_argument('--posterior_reg_mult', type=float, default=1e-3)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--train_ratio', type=float, default=0.8)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     parser.add_argument('--n_workers', type=int, default=10)
