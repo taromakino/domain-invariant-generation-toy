@@ -37,7 +37,7 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
 
-    def repeat_samples(self, x):
+    def repeat(self, x):
         batch_size, other_size = x.shape[0], x.shape[1:]
         expanded_shape = (self.n_samples, batch_size,) + other_size
         x = x.expand(*expanded_shape)
@@ -46,11 +46,12 @@ class VAE(pl.LightningModule):
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
         batch_size, z_size = mu.shape
-        epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
+        mu = self.repeat(mu)
+        scale_tril = self.repeat(scale_tril)
+        epsilon = torch.randn(self.n_samples * batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
-        x, y, e = self.repeat_samples(x), self.repeat_samples(y), self.repeat_samples(e)
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
@@ -58,13 +59,13 @@ class VAE(pl.LightningModule):
         z = self.sample_z(posterior_dist)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         x_pred = self.decoder(z)
-        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
+        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, self.repeat(x), reduction='none').sum(dim=1).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.causal_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, self.repeat(y))
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
-        prior_dist = self.prior_dist(y_idx, e_idx)
+        prior_dist = self.prior_dist(self.repeat(y_idx), self.repeat(e_idx))
         log_prob_prior = prior_dist.log_prob(z).mean()
         entropy_posterior = posterior_dist.entropy().mean()
         posterior_reg = self.posterior_reg(posterior_dist).mean()
