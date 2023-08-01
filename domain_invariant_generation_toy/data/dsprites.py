@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from utils.nn_utils import make_dataloader
+from utils.plot import hist_discrete
 from utils.stats import min_max_scale
 
 
@@ -20,21 +21,21 @@ def make_raw_data():
     e[idxs_env1] = 1
 
     width = np.full(N_TOTAL, np.nan)
-    width[idxs_env0] = (RNG.normal(20, 6, len(idxs_env0))).astype(int)
-    width[idxs_env1] = (RNG.normal(28, 2, len(idxs_env1))).astype(int)
+    width[idxs_env0] = (RNG.normal(18, 4, len(idxs_env0))).astype(int)
+    width[idxs_env1] = (RNG.normal(22, 4, len(idxs_env1))).astype(int)
     width = np.clip(width, WIDTH_LB, WIDTH_UB)
 
-    y = min_max_scale(width)
+    y = min_max_scale(width ** 2)
     y = RNG.binomial(1, y, len(y))
 
     brightness = np.full(N_TOTAL, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
-    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     brightness[idxs_y0_e0] = RNG.normal(0.3, 0.01, len(idxs_y0_e0))
-    brightness[idxs_y0_e1] = RNG.normal(0.7, 0.01, len(idxs_y0_e1))
-    brightness[idxs_y1_e0] = RNG.normal(0.5, 0.01, len(idxs_y1_e0))
+    brightness[idxs_y1_e0] = RNG.normal(0.7, 0.01, len(idxs_y1_e0))
+    brightness[idxs_y0_e1] = RNG.normal(0.5, 0.01, len(idxs_y0_e1))
     brightness[idxs_y1_e1] = RNG.normal(0.9, 0.01, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
@@ -73,37 +74,33 @@ def main():
     e, width, y, brightness, x = make_raw_data()
     e, y, brightness = e.squeeze(), y.squeeze(), brightness.squeeze()
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
-    axes[0].hist(width[e == 0])
-    axes[1].hist(width[e == 1])
+    hist_discrete(axes[0], width[e == 0])
+    hist_discrete(axes[1], width[e == 1])
     axes[0].set_title('p(width|e=0)')
     axes[1].set_title('p(width|e=1)')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-    axes[0].hist(brightness[(y == 0) & (e == 0)])
-    axes[1].hist(brightness[(y == 0) & (e == 1)])
-    axes[2].hist(brightness[(y == 1) & (e == 0)])
-    axes[3].hist(brightness[(y == 1) & (e == 1)])
-    axes[0].set_title('p(brightness|y=0,e=0)')
-    axes[1].set_title('p(brightness|y=0,e=1)')
-    axes[2].set_title('p(brightness|y=1,e=0)')
-    axes[3].set_title('p(brightness|y=1,e=1)')
+    axes[0].hist(brightness[(y == 0) & (e == 0)], bins='auto')
+    axes[1].hist(brightness[(y == 1) & (e == 0)], bins='auto')
+    axes[2].hist(brightness[(y == 0) & (e == 1)], bins='auto')
+    axes[3].hist(brightness[(y == 1) & (e == 1)], bins='auto')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-    axes[0].hist(width[(y == 0) & (e == 0)])
-    axes[1].hist(width[(y == 0) & (e == 1)])
-    axes[2].hist(width[(y == 1) & (e == 0)])
-    axes[3].hist(width[(y == 1) & (e == 1)])
+    hist_discrete(axes[0], width[(y == 0) & (e == 0)])
+    hist_discrete(axes[1], width[(y == 1) & (e == 0)])
+    hist_discrete(axes[2], width[(y == 0) & (e == 1)])
+    hist_discrete(axes[3], width[(y == 1) & (e == 1)])
     axes[0].set_title('p(width|y=0,e=0)')
-    axes[1].set_title('p(width|y=0,e=1)')
-    axes[2].set_title('p(width|y=1,e=0)')
+    axes[1].set_title('p(width|y=1,e=0)')
+    axes[2].set_title('p(width|y=0,e=1)')
     axes[3].set_title('p(width|y=1,e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
-    axes[0].hist(brightness[e == 0])
-    axes[1].hist(brightness[e == 1])
+    axes[0].hist(brightness[e == 0], bins='auto')
+    axes[1].hist(brightness[e == 1], bins='auto')
     axes[0].set_title('p(brightness|e=0)')
     axes[1].set_title('p(brightness|e=1)')
     fig.suptitle('Assumed Non-Gaussian')

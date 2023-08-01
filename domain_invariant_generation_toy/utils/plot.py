@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def hist_discrete(ax, x):
+    n_bins = len(np.unique(x))
+    ax.hist(x, bins=n_bins)
+
+
 def plot_grayscale_image(ax, image):
     ax.imshow(image, cmap='gray', vmin=0, vmax=1)
 

@@ -38,12 +38,12 @@ def make_raw_data():
 
     colors = np.full(n_total, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
-    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     colors[idxs_y0_e0] = RNG.normal(0.2, 0.01, len(idxs_y0_e0))
-    colors[idxs_y0_e1] = RNG.normal(0.4, 0.01, len(idxs_y0_e1))
     colors[idxs_y1_e0] = RNG.normal(0.6, 0.01, len(idxs_y1_e0))
+    colors[idxs_y0_e1] = RNG.normal(0.4, 0.01, len(idxs_y0_e1))
     colors[idxs_y1_e1] = RNG.normal(0.8, 0.01, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
@@ -82,23 +82,23 @@ def main():
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
     axes[0].hist(colors[(y == 0) & (e == 0)])
-    axes[1].hist(colors[(y == 0) & (e == 1)])
-    axes[2].hist(colors[(y == 1) & (e == 0)])
+    axes[1].hist(colors[(y == 1) & (e == 0)])
+    axes[2].hist(colors[(y == 0) & (e == 1)])
     axes[3].hist(colors[(y == 1) & (e == 1)])
     axes[0].set_title('p(color|y=0,e=0)')
-    axes[1].set_title('p(color|y=0,e=1)')
-    axes[2].set_title('p(color|y=1,e=0)')
+    axes[1].set_title('p(color|y=1,e=0)')
+    axes[2].set_title('p(color|y=0,e=1)')
     axes[3].set_title('p(color|y=1,e=1)')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
     axes[0].hist(digits[(y == 0) & (e == 0)])
-    axes[1].hist(digits[(y == 0) & (e == 1)])
-    axes[2].hist(digits[(y == 1) & (e == 0)])
+    axes[1].hist(digits[(y == 1) & (e == 0)])
+    axes[2].hist(digits[(y == 0) & (e == 1)])
     axes[3].hist(digits[(y == 1) & (e == 1)])
     axes[0].set_title('p(digit|y=0,e=0)')
-    axes[1].set_title('p(digit|y=0,e=1)')
-    axes[2].set_title('p(digit|y=1,e=0)')
+    axes[1].set_title('p(digit|y=1,e=0)')
+    axes[2].set_title('p(digit|y=0,e=1)')
     axes[3].set_title('p(digit|y=1,e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
