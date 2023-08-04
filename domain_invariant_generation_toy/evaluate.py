@@ -52,7 +52,7 @@ def main(args):
     y_pred = []
     for x_batch, _ in data_test:
         batch_size = len(x_batch)
-        z_batch = nn.Parameter(torch.zeros(batch_size, 2 * existing_args.z_size)).to(vae.device)
+        z_batch = nn.Parameter(torch.zeros(batch_size, 2 * existing_args.z_size, device=vae.device))
         nn.init.xavier_normal_(z_batch)
         optim = Adam([z_batch], lr=args.lr)
         optim_loss = np.inf
