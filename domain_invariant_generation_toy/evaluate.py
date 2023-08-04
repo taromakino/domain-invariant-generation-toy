@@ -43,7 +43,7 @@ def main(args):
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
     x_test, y_test = data_test.dataset[:]
-    x_test, y_test = x_test.to(vae.device), y_test.to(vae.device)
+    y_test = y_test.to(vae.device)
     y_idx_train = y_train.int()[:, 0]
     e_idx_train = e_train.int()[:, 0]
     zc_train, zs_train = torch.chunk(vae.posterior_dist(x_train, y_idx_train, e_idx_train).loc, 2, dim=1)
@@ -51,6 +51,7 @@ def main(args):
     q_zs = multivariate_normal(zs_train)
     y_pred = []
     for x_batch, _ in data_test:
+        x_batch = x_batch.to(vae.device)
         batch_size = len(x_batch)
         z_batch = nn.Parameter(torch.zeros(batch_size, 2 * existing_args.z_size, device=vae.device))
         nn.init.xavier_normal_(z_batch)
