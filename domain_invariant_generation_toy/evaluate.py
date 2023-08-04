@@ -38,7 +38,7 @@ def main(args):
     pl.seed_everything(existing_args.seed)
     data_train, data_val, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio,
         existing_args.batch_size, existing_args.n_workers)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
+    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     vae.freeze()
     x_train, y_train, e_train = data_train.dataset[:]
     x_test, y_test = data_test.dataset[:]
