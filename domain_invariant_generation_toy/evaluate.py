@@ -36,12 +36,14 @@ def loss(vae, q_zc, q_zs, x, z):
 def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio,
-        existing_args.batch_size, existing_args.n_workers)
+    data_train, _, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size,
+        existing_args.n_workers)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     vae.freeze()
     x_train, y_train, e_train = data_train.dataset[:]
+    x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
     x_test, y_test = data_test.dataset[:]
+    x_test, y_test = x_test.to(vae.device), y_test.to(vae.device)
     y_idx_train = y_train.int()[:, 0]
     e_idx_train = e_train.int()[:, 0]
     zc_train, zs_train = torch.chunk(vae.posterior_dist(x_train, y_idx_train, e_idx_train).loc, 2, dim=1)
