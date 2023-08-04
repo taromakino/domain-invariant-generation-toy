@@ -17,7 +17,7 @@ def flip_binary(x, flip_prob):
     return x
 
 
-def make_raw_data():
+def make_trainval_data():
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
@@ -57,8 +57,30 @@ def make_raw_data():
     return e, digits, y, colors, x
 
 
+def make_test_data(batch_size, n_workers):
+    mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
+    binary_idxs = np.where(mnist.targets <= 1)
+    images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
+    n_total = len(images)
+
+    y = flip_binary(digits.clone(), 0.25)
+
+    colors = np.full(n_total, np.nan)
+    idxs_y0 = np.where(y == 0)[0]
+    idxs_y1 = np.where(y == 1)[0]
+    colors[idxs_y0] = RNG.normal(0.9, 0.01, len(idxs_y0))
+    colors[idxs_y1] = RNG.normal(0.1, 0.01, len(idxs_y1))
+    colors = np.clip(colors, 0, 1)[:, None, None]
+
+    images = torch.stack([images, images], dim=1)
+    images = images / 255
+    images[:, 0, :, :] *= colors
+    images[:, 1, :, :] *= (1 - colors)
+    return make_dataloader((images.flatten(start_dim=1), y[:, None].float()), batch_size, n_workers, False)
+
+
 def make_data(train_ratio, batch_size, n_workers):
-    e, digits, y, colors, x = make_raw_data()
+    e, digits, y, colors, x = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
     train_idxs = RNG.choice(np.arange(n_total), n_train, replace=False)
@@ -67,11 +89,12 @@ def make_data(train_ratio, batch_size, n_workers):
     x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
     data_train = make_dataloader((x_train, y_train, e_train), batch_size, n_workers, True)
     data_val = make_dataloader((x_val, y_val, e_val), batch_size, n_workers, False)
-    return data_train, data_val
+    data_test = make_test_data(batch_size, n_workers)
+    return data_train, data_val, data_test
 
 
 def main():
-    e, digits, y, colors, x = make_raw_data()
+    e, digits, y, colors, x = make_trainval_data()
     e, y, colors = e.squeeze(), y.squeeze(), colors.squeeze()
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
     axes[0].hist(digits[e == 0])

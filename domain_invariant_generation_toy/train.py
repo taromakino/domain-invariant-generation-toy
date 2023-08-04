@@ -10,7 +10,7 @@ from vae import VAE
 def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
-    data_train, data_val = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_workers)
+    data_train, data_val, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_workers)
     x_train, y_train, e_train = data_train.dataset[:]
     n_classes = int(y_train.max() + 1)
     n_envs = int(e_train.max() + 1)
