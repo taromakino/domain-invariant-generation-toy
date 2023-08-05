@@ -42,8 +42,8 @@ def make_trainval_data():
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     colors[idxs_y0_e0] = RNG.normal(0.2, 0.1, len(idxs_y0_e0))
-    colors[idxs_y0_e1] = RNG.normal(0.7, 0.1, len(idxs_y0_e1))
-    colors[idxs_y1_e0] = RNG.normal(0.3, 0.1, len(idxs_y1_e0))
+    colors[idxs_y0_e1] = RNG.normal(0.5, 0.1, len(idxs_y0_e1))
+    colors[idxs_y1_e0] = RNG.normal(0.5, 0.1, len(idxs_y1_e0))
     colors[idxs_y1_e1] = RNG.normal(0.8, 0.1, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
