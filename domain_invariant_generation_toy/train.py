@@ -10,7 +10,7 @@ from vae import VAE
 def main(args):
     save_file(args, os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(args.seed)
-    data_train, data_val, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_workers)
+    data_train, data_val, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     x_train, y_train, e_train = data_train.dataset[:]
     n_classes = int(y_train.max() + 1)
     n_envs = int(e_train.max() + 1)
@@ -34,6 +34,5 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
-    parser.add_argument('--n_workers', type=int, default=10)
     args = parser.parse_args()
     main(args)

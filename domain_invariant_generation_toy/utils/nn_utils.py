@@ -24,9 +24,8 @@ class MLP(nn.Module):
         return self.module_list(torch.hstack(args))
 
 
-def make_dataloader(data_tuple, batch_size, n_workers, is_train):
-    return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size, num_workers=n_workers,
-        pin_memory=True, persistent_workers=True)
+def make_dataloader(data_tuple, batch_size, is_train):
+    return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
 def make_trainer(dpath, seed, n_epochs, early_stop_ratio):

@@ -20,7 +20,7 @@ def log_prob_yzc(vae, p_zc, y, zc):
 def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size, 1)
+    data_train, data_val = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     vae.freeze()
