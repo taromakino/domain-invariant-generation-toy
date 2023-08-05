@@ -31,13 +31,13 @@ def make_trainval_data():
 
     brightness = np.full(N_TRAINVAL, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
-    idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
+    idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    brightness[idxs_y0_e0] = RNG.normal(0.2, 0.1, len(idxs_y0_e0))
-    brightness[idxs_y1_e0] = RNG.normal(0.4, 0.1, len(idxs_y1_e0))
-    brightness[idxs_y0_e1] = RNG.normal(0.6, 0.1, len(idxs_y0_e1))
-    brightness[idxs_y1_e1] = RNG.normal(0.8, 0.1, len(idxs_y1_e1))
+    brightness[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
+    brightness[idxs_y0_e1] = RNG.normal(0.5, 0.05, len(idxs_y0_e1))
+    brightness[idxs_y1_e0] = RNG.normal(0.5, 0.05, len(idxs_y1_e0))
+    brightness[idxs_y1_e1] = RNG.normal(0.8, 0.05, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
@@ -73,8 +73,8 @@ def make_test_data(batch_size):
     brightness = np.full(N_TEST, np.nan)
     idxs_y0 = np.where(y == 0)[0]
     idxs_y1 = np.where(y == 1)[0]
-    brightness[idxs_y0] = RNG.normal(0.8, 0.01, len(idxs_y0))
-    brightness[idxs_y1] = RNG.normal(0.2, 0.01, len(idxs_y1))
+    brightness[idxs_y0] = RNG.normal(0.8, 0.05, len(idxs_y0))
+    brightness[idxs_y1] = RNG.normal(0.2, 0.05, len(idxs_y1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
@@ -121,19 +121,23 @@ def main():
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
     axes[0].hist(brightness[(y == 0) & (e == 0)], bins='auto')
-    axes[1].hist(brightness[(y == 1) & (e == 0)], bins='auto')
-    axes[2].hist(brightness[(y == 0) & (e == 1)], bins='auto')
+    axes[1].hist(brightness[(y == 0) & (e == 1)], bins='auto')
+    axes[2].hist(brightness[(y == 1) & (e == 0)], bins='auto')
     axes[3].hist(brightness[(y == 1) & (e == 1)], bins='auto')
+    axes[0].set_title('p(brightness|y=0,e=0)')
+    axes[1].set_title('p(brightness|y=0,e=1)')
+    axes[2].set_title('p(brightness|y=1,e=0)')
+    axes[3].set_title('p(brightness|y=1,e=1)')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
     hist_discrete(axes[0], width[(y == 0) & (e == 0)])
-    hist_discrete(axes[1], width[(y == 1) & (e == 0)])
-    hist_discrete(axes[2], width[(y == 0) & (e == 1)])
+    hist_discrete(axes[1], width[(y == 0) & (e == 1)])
+    hist_discrete(axes[2], width[(y == 1) & (e == 0)])
     hist_discrete(axes[3], width[(y == 1) & (e == 1)])
     axes[0].set_title('p(width|y=0,e=0)')
-    axes[1].set_title('p(width|y=1,e=0)')
-    axes[2].set_title('p(width|y=0,e=1)')
+    axes[1].set_title('p(width|y=0,e=1)')
+    axes[2].set_title('p(width|y=1,e=0)')
     axes[3].set_title('p(width|y=1,e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
