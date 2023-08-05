@@ -20,7 +20,7 @@ def log_prob_yzc(vae, p_zc, y, zc):
 def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
+    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     vae.freeze()
@@ -50,7 +50,6 @@ def main(args):
             loss = -log_prob_yzc(vae, p_zc, 1 - y_seed, zc_perturb)
             loss.backward()
             optimizer.step()
-        print(loss)
         x_perturb = torch.sigmoid(vae.decoder(torch.hstack((zc_perturb, zs_seed))))
         plot(axes[col_idx], x_perturb.reshape(image_size).detach().numpy())
     fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate')

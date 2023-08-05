@@ -20,7 +20,7 @@ def main(args):
     rng = np.random.RandomState(args.seed)
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
+    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
         map_location='cpu')
     x_train, y_train, e_train = data_train.dataset[:]
