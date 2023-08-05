@@ -41,10 +41,10 @@ def make_trainval_data():
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    colors[idxs_y0_e0] = RNG.normal(0.2, 0.1, len(idxs_y0_e0))
-    colors[idxs_y0_e1] = RNG.normal(0.5, 0.1, len(idxs_y0_e1))
-    colors[idxs_y1_e0] = RNG.normal(0.5, 0.1, len(idxs_y1_e0))
-    colors[idxs_y1_e1] = RNG.normal(0.8, 0.1, len(idxs_y1_e1))
+    colors[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
+    colors[idxs_y0_e1] = RNG.normal(0.5, 0.05, len(idxs_y0_e1))
+    colors[idxs_y1_e0] = RNG.normal(0.5, 0.05, len(idxs_y1_e0))
+    colors[idxs_y1_e1] = RNG.normal(0.8, 0.05, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
     images = torch.stack([images, images], dim=1)
@@ -68,8 +68,8 @@ def make_test_data(batch_size):
     colors = np.full(n_total, np.nan)
     idxs_y0 = np.where(y == 0)[0]
     idxs_y1 = np.where(y == 1)[0]
-    colors[idxs_y0] = RNG.normal(0.8, 0.1, len(idxs_y0))
-    colors[idxs_y1] = RNG.normal(0.2, 0.1, len(idxs_y1))
+    colors[idxs_y0] = RNG.normal(0.8, 0.05, len(idxs_y0))
+    colors[idxs_y1] = RNG.normal(0.2, 0.05, len(idxs_y1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
     images = torch.stack([images, images], dim=1)
