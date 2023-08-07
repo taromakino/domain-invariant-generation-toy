@@ -35,8 +35,8 @@ def make_trainval_data():
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     brightness[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
-    brightness[idxs_y0_e1] = RNG.normal(0.5, 0.05, len(idxs_y0_e1))
-    brightness[idxs_y1_e0] = RNG.normal(0.5, 0.05, len(idxs_y1_e0))
+    brightness[idxs_y0_e1] = RNG.normal(0.4, 0.05, len(idxs_y0_e1))
+    brightness[idxs_y1_e0] = RNG.normal(0.6, 0.05, len(idxs_y1_e0))
     brightness[idxs_y1_e1] = RNG.normal(0.8, 0.05, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)[:, None]
 
