@@ -168,7 +168,7 @@ class VAE(pl.LightningModule):
         with torch.set_grad_enabled(True):
             x, y = batch
             y_pred = self.inference(x)
-            acc = self.acc(y_pred, y)
+            acc = self.acc(y_pred, y.long()[:, 0])
             self.log(f'{self.stage}_acc', acc, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
