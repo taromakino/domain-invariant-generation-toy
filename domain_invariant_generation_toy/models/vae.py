@@ -108,7 +108,9 @@ class VAE(pl.LightningModule):
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
         log_prob_zc = q_zc.log_prob(z_c).mean()
         log_prob_zs = q_zs.log_prob(z_s).mean()
-        return -log_prob_x_z - self.classifier_mult * log_prob_y_zc - log_prob_zc - log_prob_zs
+        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc - log_prob_zc - log_prob_zs
+        y_pred = prob_y_zc.argmax(dim=1)
+        return loss, y_pred
 
     def inference(self, x):
         batch_size = len(x)
@@ -117,17 +119,16 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(z_param)
         optim = Adam([z_param], lr=self.lr_inference)
         optim_loss = torch.inf
-        optim_z = None
+        optim_y_pred = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            loss = self.inference_loss(x, z_param, q_zc, q_zs)
+            loss, y_pred = self.inference_loss(x, z_param, q_zc, q_zs)
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
-                optim_z = z_param.clone()
-        optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return self.causal_classifier(optim_zc)
+                optim_y_pred = y_pred.clone()
+        return optim_y_pred
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
@@ -167,8 +168,7 @@ class VAE(pl.LightningModule):
         with torch.set_grad_enabled(True):
             x, y = batch
             y_pred = self.inference(x)
-            y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
-            acc = self.acc(y_pred_class, y)
+            acc = self.acc(y_pred, y)
             self.log(f'{self.stage}_acc', acc, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
