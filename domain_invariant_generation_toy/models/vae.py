@@ -124,10 +124,11 @@ class VAE(pl.LightningModule):
         for _ in range(self.n_steps):
             optim.zero_grad()
             loss = self.inference_loss(x, z_param, q_zc, q_zs)
-            loss.mean().backward()
+            loss_mean = loss.mean()
+            loss_mean.backward()
             optim.step()
-            if loss < optim_loss_mean:
-                optim_loss_mean = loss.mean()
+            if loss_mean < optim_loss_mean:
+                optim_loss_mean = loss_mean
                 optim_loss = loss.detach().clone()
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
