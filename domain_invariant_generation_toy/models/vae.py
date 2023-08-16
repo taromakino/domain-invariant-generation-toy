@@ -165,7 +165,7 @@ class VAE(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         self.train()
         with torch.set_grad_enabled(True):
-            x, y, e = batch
+            x, y = batch
             y_pred = self.inference(x)
             auprc = self.auprc(y_pred, y.long())
             self.log(f'{self.stage}_auprc', auprc, on_step=False, on_epoch=True)
