@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from utils.file import load_file, save_file
 from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
-from torchmetrics import AveragePrecision
+from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
 
@@ -42,7 +42,7 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_cov_spurious)
         self.z_train = []
         self.q_fpath = os.path.join(dpath, f'version_{seed}', 'q.pkl')
-        self.auprc = AveragePrecision('binary')
+        self.accuracy = Accuracy('binary')
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -127,7 +127,7 @@ class VAE(pl.LightningModule):
                 optim_loss = loss
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return torch.sigmoid(self.causal_classifier(optim_zc))
+        return self.causal_classifier(optim_zc)
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
@@ -167,8 +167,9 @@ class VAE(pl.LightningModule):
         with torch.set_grad_enabled(True):
             x, y = batch
             y_pred = self.inference(x)
-            auprc = self.auprc(y_pred, y.long())
-            self.log(f'{self.stage}_auprc', auprc, on_step=False, on_epoch=True)
+            y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
+            acc = self.acc(y_pred_class, y)
+            self.log(f'{self.stage}_acc', acc, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
