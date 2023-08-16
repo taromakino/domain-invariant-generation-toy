@@ -135,7 +135,7 @@ class VAE(pl.LightningModule):
             loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
             return loss
         elif self.stage == 'train_q':
-            x, xs, y, e = batch
+            x, y, e = batch
             y_idx = y.int()[:, 0]
             e_idx = e.int()[:, 0]
             posterior_dist = self.posterior_dist(x, y_idx, e_idx)
