@@ -42,7 +42,7 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_cov_spurious)
         self.z_train = []
         self.q_fpath = os.path.join(dpath, f'version_{seed}', 'q.pkl')
-        self.accuracy = Accuracy('binary')
+        self.acc = Accuracy('binary')
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
