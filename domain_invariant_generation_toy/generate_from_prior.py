@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, PLOT, IMAGE_SHAPE
-from vae import VAE
+from models.vae import VAE
 from utils.file import load_file
 
 

@@ -28,15 +28,6 @@ def make_dataloader(data_tuple, batch_size, is_train):
     return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
-def make_trainer(dpath, seed, n_epochs, early_stop_ratio):
-    return pl.Trainer(
-        logger=CSVLogger(dpath, name='', version=seed),
-        callbacks=[
-            EarlyStopping(monitor="val_loss", patience=int(early_stop_ratio * n_epochs)),
-            ModelCheckpoint(monitor="val_loss", filename="best")],
-        max_epochs=n_epochs)
-
-
 def size_to_n_tril(size):
     '''
     Return the number of nonzero entries in a square lower triangular matrix with size rows/columns

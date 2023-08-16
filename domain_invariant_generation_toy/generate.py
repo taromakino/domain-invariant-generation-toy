@@ -8,7 +8,7 @@ from data import MAKE_DATA, PLOT, IMAGE_SHAPE
 from torch.optim import Adam
 from utils.file import load_file
 from utils.stats import multivariate_normal
-from vae import VAE
+from models.vae import VAE
 
 
 def log_prob_yzc(vae, p_zc, y, zc):
