@@ -1,4 +1,3 @@
-import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
@@ -43,7 +42,6 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_cov_spurious)
         self.z_train = []
         self.q_fpath = os.path.join(dpath, f'version_{seed}', 'q.pkl')
-        self.inference_loss_mean = MeanMetric()
         self.acc = Accuracy('binary')
 
     def sample_z(self, dist):
@@ -102,15 +100,15 @@ class VAE(pl.LightningModule):
 
     def inference_loss(self, x, z, q_zc, q_zs):
         x_pred = self.decoder(z)
-        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
         prob_y1_zc = torch.sigmoid(self.causal_classifier(z_c))
         prob_y0_zc = 1 - prob_y1_zc
         prob_y_zc = torch.hstack((prob_y0_zc, prob_y1_zc))
-        log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values)
-        log_prob_zc = q_zc.log_prob(z_c)
-        log_prob_zs = q_zs.log_prob(z_s)
-        return -log_prob_x_z - self.classifier_mult * log_prob_y_zc - log_prob_zc - log_prob_zs
+        log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
+        log_prob_zc = q_zc.log_prob(z_c).mean()
+        log_prob_zs = q_zs.log_prob(z_s).mean()
+        return log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs
 
     def inference(self, x):
         batch_size = len(x)
@@ -118,21 +116,24 @@ class VAE(pl.LightningModule):
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
         nn.init.xavier_normal_(z_param)
         optim = Adam([z_param], lr=self.lr_inference)
-        optim_loss_mean = torch.inf
-        optim_loss = None
-        optim_z = None
+        optim_loss = torch.inf
+        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_zc = optim_log_prob_zs = optim_z = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            loss = self.inference_loss(x, z_param, q_zc, q_zs)
-            loss_mean = loss.mean()
-            loss_mean.backward()
+            log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs = self.inference_loss(x, z_param, q_zc, q_zs)
+            loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc - log_prob_zc - log_prob_zs
+            loss.backward()
             optim.step()
-            if loss_mean < optim_loss_mean:
-                optim_loss_mean = loss_mean
-                optim_loss = loss.detach().clone()
+            if loss < optim_loss:
+                optim_loss = loss
+                optim_log_prob_x_z = log_prob_x_z
+                optim_log_prob_y_zc = log_prob_y_zc
+                optim_log_prob_zc = log_prob_zc
+                optim_log_prob_zs = log_prob_zs
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return self.causal_classifier(optim_zc), optim_loss
+        return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_zc, \
+            optim_log_prob_zs, optim_loss
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
@@ -171,9 +172,11 @@ class VAE(pl.LightningModule):
         self.train()
         with torch.set_grad_enabled(True):
             x, y = batch
-            y_pred, inference_loss = self.inference(x)
-            inference_loss_mean = self.inference_loss_mean(inference_loss)
-            self.log('test_inference_loss', inference_loss_mean, on_step=False, on_epoch=True)
+            y_pred, log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs, loss = self.inference(x)
+            self.log('test_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+            self.log('test_log_prob_zc', log_prob_zc, on_step=False, on_epoch=True)
+            self.log('test_log_prob_zs', log_prob_zs, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             acc = self.acc(y_pred_class, y)
             self.log('test_acc', acc, on_step=False, on_epoch=True)
