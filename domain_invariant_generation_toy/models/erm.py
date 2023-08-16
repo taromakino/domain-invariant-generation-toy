@@ -8,10 +8,9 @@ from utils.nn_utils import MLP
 
 
 class ERM(pl.LightningModule):
-    def __init__(self, stage, x_size, h_sizes, lr):
+    def __init__(self, x_size, h_sizes, lr):
         super().__init__()
         self.save_hyperparameters()
-        self.stage = stage
         self.lr = lr
         self.model = MLP(x_size, h_sizes, 1, nn.ReLU)
         self.acc = Accuracy('binary')
@@ -34,7 +33,7 @@ class ERM(pl.LightningModule):
         y_pred = self.model(x)
         y_pred_class = (torch.sigmoid(y_pred) > 0.5).int()
         acc = self.acc(y_pred_class, y)
-        self.log(f'{self.stage}_acc', acc, on_step=False, on_epoch=True)
+        self.log('test_acc', acc, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)

@@ -10,17 +10,18 @@ from utils.file import save_file
 
 
 def make_model(args, x_size):
-    model_class = ERM if args.is_erm else VAE
-    if args.stage == 'train':
-        if args.is_erm:
-            model = model_class(args.stage, x_size, args.h_sizes, args.lr)
+    if args.is_erm:
+        if args.ckpt_fpath is None:
+            return ERM(x_size, args.h_sizes, args.lr)
         else:
-            model = model_class(args.dpath, args.seed, args.stage, x_size, args.z_size, args.h_sizes,
-                args.classifier_mult, args.posterior_reg_mult, args.lr, args.lr_inference, args.n_steps)
+            return ERM.load_from_checkpoint(args.ckpt_fpath)
     else:
-        model = model_class.load_from_checkpoint(args.ckpt_fpath)
-    model.stage = args.stage
-    return model
+        if args.ckpt_fpath is None:
+            return VAE(args.dpath, args.seed, args.stage, x_size, args.z_size, args.h_sizes, args.classifier_mult,
+                args.posterior_reg_mult, args.lr, args.lr_inference, args.n_steps)
+        else:
+            return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, lr_inference=args.lr_inference,
+                n_steps=args.n_steps)
 
 
 def make_trainer(args):
