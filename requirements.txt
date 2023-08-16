@@ -1,7 +1,0 @@
-causal-learn
-cdt
-matplotlib
-pandas
-pytorch-lightning
-torch
-torchvision

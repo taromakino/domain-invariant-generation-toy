@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name='disentangled_prediction',
+    name='domain_invariant_generation_toy',
     packages=find_packages(),
     install_requires=[
         'matplotlib',
