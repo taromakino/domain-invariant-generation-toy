@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from utils.file import load_file, save_file
 from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
-from torchmetrics import Accuracy, MeanMetric
+from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
 
@@ -177,6 +177,7 @@ class VAE(pl.LightningModule):
             self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('test_log_prob_zc', log_prob_zc, on_step=False, on_epoch=True)
             self.log('test_log_prob_zs', log_prob_zs, on_step=False, on_epoch=True)
+            self.log('test_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             acc = self.acc(y_pred_class, y)
             self.log('test_acc', acc, on_step=False, on_epoch=True)
