@@ -12,13 +12,14 @@ from data import N_CLASSES, N_ENVS
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, dpath, seed, stage, x_size, z_size, h_sizes, classifier_mult, posterior_reg_mult, lr,
-            lr_inference, n_steps):
+    def __init__(self, dpath, seed, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult,
+            lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
-        self.classifier_mult = classifier_mult
+        self.alpha_train = alpha_train
+        self.alpha_inference = alpha_inference
         self.posterior_reg_mult = posterior_reg_mult
         self.lr = lr
         self.lr_inference = lr_inference
@@ -121,7 +122,7 @@ class VAE(pl.LightningModule):
         for _ in range(self.n_steps):
             optim.zero_grad()
             log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs = self.inference_loss(x, z_param, q_zc, q_zs)
-            loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc - log_prob_zc - log_prob_zs
+            loss = -log_prob_x_z - self.alpha_inference * log_prob_y_zc - log_prob_zc - log_prob_zs
             loss.backward()
             optim.step()
             if loss < optim_loss:
@@ -138,7 +139,7 @@ class VAE(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
             log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
             return loss
         elif self.stage == 'train_q':
             x, y, e = batch
@@ -161,7 +162,7 @@ class VAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - self.classifier_mult * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+        loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_kl', kl, on_step=False, on_epoch=True)
