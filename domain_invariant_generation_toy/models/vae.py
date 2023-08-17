@@ -25,12 +25,12 @@ class VAE(pl.LightningModule):
         self.lr_inference = lr_inference
         self.n_steps = n_steps
         # q(z_c|x,y,e)
-        self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.ReLU)
-        self.encoder_cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * self.z_size), nn.ReLU)
+        self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.LeakyReLU)
+        self.encoder_cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * self.z_size), nn.LeakyReLU)
         # p(x|z_c, z_s)
-        self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.ReLU)
+        self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.LeakyReLU)
         # p(y|z_c)
-        self.causal_classifier = MLP(z_size, h_sizes, 1, nn.ReLU)
+        self.causal_classifier = MLP(z_size, h_sizes, 1, nn.LeakyReLU)
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(N_ENVS, self.z_size))
         self.prior_cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(self.z_size)))
