@@ -174,14 +174,14 @@ class VAE(pl.LightningModule):
         with torch.set_grad_enabled(True):
             x, y = batch
             y_pred, log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs, loss = self.inference(x)
-            self.log('test_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-            self.log('test_log_prob_zc', log_prob_zc, on_step=False, on_epoch=True)
-            self.log('test_log_prob_zs', log_prob_zs, on_step=False, on_epoch=True)
-            self.log('test_loss', loss, on_step=False, on_epoch=True)
+            self.log('test_log_prob_x_z', log_prob_x_z, on_step=True, on_epoch=True)
+            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=True, on_epoch=True)
+            self.log('test_log_prob_zc', log_prob_zc, on_step=True, on_epoch=True)
+            self.log('test_log_prob_zs', log_prob_zs, on_step=True, on_epoch=True)
+            self.log('test_loss', loss, on_step=True, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             acc = self.acc(y_pred_class, y)
-            self.log('test_acc', acc, on_step=False, on_epoch=True)
+            self.log('test_acc', acc, on_step=True, on_epoch=True)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
