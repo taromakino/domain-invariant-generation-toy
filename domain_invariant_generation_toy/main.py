@@ -18,10 +18,11 @@ def make_model(args, x_size):
     else:
         if args.ckpt_fpath is None:
             return VAE(args.dpath, args.seed, args.stage, x_size, args.z_size, args.h_sizes, args.alpha_train,
-                args.alpha_inference, args.posterior_reg_mult, args.lr, args.lr_inference, args.n_steps)
+                args.alpha_inference, args.posterior_reg_mult, args.q_reg_mult, args.lr, args.lr_inference,
+                args.n_samples, args.n_steps)
         else:
-            return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, alpha_inference=args.alpha_inference,
-                lr_inference=args.lr_inference, n_steps=args.n_steps)
+            return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, q_reg_mult=args.q_reg_mult,
+                lr_inference=args.lr_inference, n_samples=args.n_samples, n_steps=args.n_steps)
 
 
 def make_trainer(args):
@@ -74,9 +75,11 @@ if __name__ == '__main__':
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--alpha_train', type=float, default=1)
     parser.add_argument('--alpha_inference', type=float, default=1)
-    parser.add_argument('--posterior_reg_mult', type=float, default=0.01)
+    parser.add_argument('--posterior_reg_mult', type=float, default=0)
+    parser.add_argument('--q_reg_mult', type=float, default=0)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--lr_inference', type=float, default=1e-4)
+    parser.add_argument('--lr_inference', type=float, default=1e-3)
+    parser.add_argument('--n_samples', type=int, default=1000)
     parser.add_argument('--n_steps', type=int, default=1000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)

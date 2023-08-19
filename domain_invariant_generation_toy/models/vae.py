@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
@@ -13,7 +14,7 @@ from data import N_CLASSES, N_ENVS
 
 class VAE(pl.LightningModule):
     def __init__(self, dpath, seed, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult,
-            lr, lr_inference, n_steps):
+            q_reg_mult, lr, lr_inference, n_samples, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
@@ -21,8 +22,10 @@ class VAE(pl.LightningModule):
         self.alpha_train = alpha_train
         self.alpha_inference = alpha_inference
         self.posterior_reg_mult = posterior_reg_mult
+        self.q_reg_mult = q_reg_mult
         self.lr = lr
         self.lr_inference = lr_inference
+        self.n_samples = n_samples
         self.n_steps = n_steps
         # q(z_c|x,y,e)
         self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.LeakyReLU)
@@ -41,7 +44,8 @@ class VAE(pl.LightningModule):
         self.prior_cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
-        self.z_train = []
+        self.q_mu = []
+        self.q_cov = []
         self.q_fpath = os.path.join(dpath, f'version_{seed}', 'q.pkl')
         self.acc = Accuracy('binary')
 
@@ -99,7 +103,7 @@ class VAE(pl.LightningModule):
         standard_normal = D.MultivariateNormal(mu, cov)
         return D.kl_divergence(posterior_dist, standard_normal)
 
-    def inference_loss(self, x, z, q_zc, q_zs):
+    def inference_loss(self, x, z, q_z):
         x_pred = self.decoder(z)
         log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
@@ -107,34 +111,37 @@ class VAE(pl.LightningModule):
         prob_y0_zc = 1 - prob_y1_zc
         prob_y_zc = torch.hstack((prob_y0_zc, prob_y1_zc))
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
-        log_prob_zc = q_zc.log_prob(z_c).mean()
-        log_prob_zs = q_zs.log_prob(z_s).mean()
-        return log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs
+        log_prob_z = q_z.log_prob(z[:, None, :])
+        log_prob_z = (torch.logsumexp(log_prob_z, dim=1) - np.log(log_prob_z.shape[1])).mean()
+        return log_prob_x_z, log_prob_y_zc, log_prob_z
 
     def inference(self, x):
         batch_size = len(x)
-        q_zc, q_zs = load_file(self.q_fpath)
+        # posterior train
+        q_mu, q_cov = load_file(self.q_fpath)
+        rng = np.random.RandomState(np.random.get_state())
+        idxs = rng.choice(len(q_mu), self.n_samples, replace=False)
+        q_mu, q_cov = q_mu[idxs], q_cov[idxs]
+        q_z = D.MultivariateNormal(q_mu, scale_tril=q_cov)
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
         nn.init.xavier_normal_(z_param)
         optim = Adam([z_param], lr=self.lr_inference)
         optim_loss = torch.inf
-        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_zc = optim_log_prob_zs = optim_z = None
+        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z = optim_z = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs = self.inference_loss(x, z_param, q_zc, q_zs)
-            loss = -log_prob_x_z - self.alpha_inference * log_prob_y_zc - log_prob_zc - log_prob_zs
+            log_prob_x_z, log_prob_y_zc, log_prob_z = self.inference_loss(x, z_param, q_z)
+            loss = -log_prob_x_z - log_prob_y_zc - self.q_reg_mult * self.log_prob_z
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
                 optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
-                optim_log_prob_zc = log_prob_zc
-                optim_log_prob_zs = log_prob_zs
+                optim_log_prob_z = log_prob_z
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_zc, \
-            optim_log_prob_zs, optim_loss
+        return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
@@ -146,19 +153,14 @@ class VAE(pl.LightningModule):
             y_idx = y.int()[:, 0]
             e_idx = e.int()[:, 0]
             posterior_dist = self.posterior_dist(x, y_idx, e_idx)
-            self.z_train.append(posterior_dist.loc.detach().cpu())
+            self.q_mu.append(posterior_dist.loc.detach().cpu())
+            self.q_cov.append(posterior_dist.scale_tril.detach().cpu())
 
     def on_train_epoch_end(self):
         if self.stage == 'train_q':
-            z_train = torch.vstack(self.z_train)
-            zc_train, zs_train = torch.chunk(z_train, 2, dim=1)
-            zc_mu = zc_train.mean(dim=0).to(self.device)
-            zs_mu = zs_train.mean(dim=0).to(self.device)
-            zc_cov = torch.cov(torch.swapaxes(zc_train, 0, 1)).to(self.device)
-            zs_cov = torch.cov(torch.swapaxes(zs_train, 0, 1)).to(self.device)
-            q_zc = D.MultivariateNormal(zc_mu, zc_cov)
-            q_zs = D.MultivariateNormal(zs_mu, zs_cov)
-            save_file((q_zc, q_zs), self.q_fpath)
+            q_mu = torch.cat(self.q_mu)
+            q_cov = torch.cat(self.q_cov)
+            save_file((q_mu, q_cov), self.q_fpath)
 
     def validation_step(self, batch, batch_idx):
         log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
@@ -173,11 +175,10 @@ class VAE(pl.LightningModule):
         self.train()
         with torch.set_grad_enabled(True):
             x, y = batch
-            y_pred, log_prob_x_z, log_prob_y_zc, log_prob_zc, log_prob_zs, loss = self.inference(x)
+            y_pred, log_prob_x_z, log_prob_y_zc, log_prob_z, loss = self.inference(x)
             self.log('test_log_prob_x_z', log_prob_x_z, on_step=True, on_epoch=True)
             self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=True, on_epoch=True)
-            self.log('test_log_prob_zc', log_prob_zc, on_step=True, on_epoch=True)
-            self.log('test_log_prob_zs', log_prob_zs, on_step=True, on_epoch=True)
+            self.log('test_log_prob_z', log_prob_z, on_step=True, on_epoch=True)
             self.log('test_loss', loss, on_step=True, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             acc = self.acc(y_pred_class, y)
