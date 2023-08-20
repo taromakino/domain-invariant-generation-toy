@@ -131,7 +131,7 @@ class VAE(pl.LightningModule):
         for _ in range(self.n_steps):
             optim.zero_grad()
             log_prob_x_z, log_prob_y_zc, log_prob_z = self.inference_loss(x, z_param, q_z)
-            loss = -log_prob_x_z - log_prob_y_zc - self.q_reg_mult * self.log_prob_z
+            loss = -log_prob_x_z - log_prob_y_zc - self.q_reg_mult * log_prob_z
             loss.backward()
             optim.step()
             if loss < optim_loss:
