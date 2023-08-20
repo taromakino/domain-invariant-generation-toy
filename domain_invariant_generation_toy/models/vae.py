@@ -1,23 +1,21 @@
 import numpy as np
-import os
 import pytorch_lightning as pl
 import torch
 import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from utils.file import load_file, save_file
+from utils.file import load_file
 from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
 from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, dpath, seed, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult,
-            q_reg_mult, lr, lr_inference, n_samples, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult,
+            q_reg_mult, lr, lr_inference, n_steps, n_components):
         super().__init__()
         self.save_hyperparameters()
-        self.rng = np.random.RandomState(seed)
         self.stage = stage
         self.z_size = z_size
         self.alpha_train = alpha_train
@@ -26,7 +24,7 @@ class VAE(pl.LightningModule):
         self.q_reg_mult = q_reg_mult
         self.lr = lr
         self.lr_inference = lr_inference
-        self.n_samples = n_samples
+        self.n_components = n_components
         self.n_steps = n_steps
         # q(z_c|x,y,e)
         self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.LeakyReLU)
@@ -45,9 +43,12 @@ class VAE(pl.LightningModule):
         self.prior_cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
-        self.q_mu = []
-        self.q_cov = []
-        self.q_fpath = os.path.join(dpath, f'version_{seed}', 'q.pkl')
+        # q(z)
+        self.q_logits = nn.Parameter(torch.ones(n_components))
+        self.q_mu = nn.Parameter(torch.zeros(n_components, 2 * self.z_size))
+        self.q_cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(2 * self.z_size)))
+        nn.init.xavier_normal_(self.q_mu)
+        nn.init.xavier_normal_(self.q_cov)
         self.acc = Accuracy('binary')
 
     def sample_z(self, dist):
@@ -61,19 +62,27 @@ class VAE(pl.LightningModule):
         e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
         posterior_dist = self.posterior_dist(x, y_idx, e_idx)
-        z = self.sample_z(posterior_dist)
-        # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-        x_pred = self.decoder(z)
-        log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
-        # E_q(z_c|x,y,e)[log p(y|z_c)]
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.causal_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-        # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
-        prior_dist = self.prior_dist(y_idx, e_idx)
-        kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        posterior_reg = self.posterior_reg(posterior_dist).mean()
-        return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
+        if self.stage == 'train':
+            z = self.sample_z(posterior_dist)
+            # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
+            x_pred = self.decoder(z)
+            log_prob_x_z = -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1).mean()
+            # E_q(z_c|x,y,e)[log p(y|z_c)]
+            z_c, z_s = torch.chunk(z, 2, dim=1)
+            y_pred = self.causal_classifier(z_c)
+            log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+            # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
+            prior_dist = self.prior_dist(y_idx, e_idx)
+            kl = D.kl_divergence(posterior_dist, prior_dist).mean()
+            posterior_reg = self.posterior_reg(posterior_dist).mean()
+            return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
+        elif self.stage == 'train_q':
+            z = posterior_dist.loc
+            q_dist = self.q_dist()
+            loss = -q_dist.log_prob(z).mean()
+            return loss
+        else:
+            raise ValueError
 
     def posterior_dist(self, x, y_idx, e_idx):
         batch_size = len(x)
@@ -97,12 +106,39 @@ class VAE(pl.LightningModule):
         prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         return D.MultivariateNormal(prior_mu, prior_cov)
 
+    def q_dist(self):
+        q_categorical_dist = D.Categorical(logits=self.q_logits)
+        q_gaussian_dist = D.MultivariateNormal(self.q_mu, arr_to_cov(self.q_cov))
+        return D.MixtureSameFamily(q_categorical_dist, q_gaussian_dist)
+
     def posterior_reg(self, posterior_dist):
         batch_size = len(posterior_dist.loc)
         mu = torch.zeros_like(posterior_dist.loc).to(self.device)
         cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         standard_normal = D.MultivariateNormal(mu, cov)
         return D.kl_divergence(posterior_dist, standard_normal)
+
+    def training_step(self, batch, batch_idx):
+        if self.stage == 'train':
+            log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
+            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+            return loss
+        elif self.stage == 'train_q':
+            loss = self.forward(*batch)
+            return loss
+
+    def validation_step(self, batch, batch_idx):
+        if self.stage == 'train':
+            log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
+            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+            self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+            self.log('val_kl', kl, on_step=False, on_epoch=True)
+            self.log('posterior_reg', posterior_reg, on_step=False, on_epoch=True)
+            self.log('val_loss', loss, on_step=False, on_epoch=True)
+        elif self.stage == 'train_q':
+            loss = self.forward(*batch)
+            self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def inference_loss(self, x, z, q_z):
         x_pred = self.decoder(z)
@@ -119,10 +155,7 @@ class VAE(pl.LightningModule):
     def inference(self, x):
         batch_size = len(x)
         # posterior train
-        q_mu, q_cov = load_file(self.q_fpath)
-        idxs = self.rng.choice(len(q_mu), self.n_samples, replace=False)
-        q_mu, q_cov = q_mu[idxs].to(self.device), q_cov[idxs].to(self.device)
-        q_z = D.MultivariateNormal(q_mu, scale_tril=q_cov)
+        q_z = self.q_dist()
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
         nn.init.xavier_normal_(z_param)
         optim = Adam([z_param], lr=self.lr_inference)
@@ -142,34 +175,6 @@ class VAE(pl.LightningModule):
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
         return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
-
-    def training_step(self, batch, batch_idx):
-        if self.stage == 'train':
-            log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
-            return loss
-        elif self.stage == 'train_q':
-            x, y, e = batch
-            y_idx = y.int()[:, 0]
-            e_idx = e.int()[:, 0]
-            posterior_dist = self.posterior_dist(x, y_idx, e_idx)
-            self.q_mu.append(posterior_dist.loc.detach().cpu())
-            self.q_cov.append(posterior_dist.scale_tril.detach().cpu())
-
-    def on_train_epoch_end(self):
-        if self.stage == 'train_q':
-            q_mu = torch.cat(self.q_mu)
-            q_cov = torch.cat(self.q_cov)
-            save_file((q_mu, q_cov), self.q_fpath)
-
-    def validation_step(self, batch, batch_idx):
-        log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-        loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
-        self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-        self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-        self.log('val_kl', kl, on_step=False, on_epoch=True)
-        self.log('posterior_reg', posterior_reg, on_step=False, on_epoch=True)
-        self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
         self.train()

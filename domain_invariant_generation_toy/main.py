@@ -18,25 +18,21 @@ def make_model(args, x_size):
     else:
         if args.ckpt_fpath is None:
             return VAE(args.dpath, args.seed, args.stage, x_size, args.z_size, args.h_sizes, args.alpha_train,
-                args.alpha_inference, args.posterior_reg_mult, args.q_reg_mult, args.lr, args.lr_inference,
-                args.n_samples, args.n_steps)
+                       args.alpha_inference, args.posterior_reg_mult, args.q_reg_mult, args.lr, args.lr_inference,
+                       args.n_samples, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, q_reg_mult=args.q_reg_mult,
-                lr_inference=args.lr_inference, n_samples=args.n_samples, n_steps=args.n_steps)
+                                            lr_inference=args.lr_inference, n_samples=args.n_samples, n_steps=args.n_steps)
 
 
 def make_trainer(args):
-    if args.stage == 'train':
+    if args.stage == 'train' or args.stage == 'train_q':
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
             callbacks=[
                 EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
                 ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
-    elif args.stage == 'train_q':
-        return pl.Trainer(
-            logger=CSVLogger(args.dpath, name='', version=args.seed),
-            max_epochs=1)
     else:
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
@@ -54,7 +50,7 @@ def main(args):
     if args.stage == 'train':
         trainer.fit(model, data_train, data_val, ckpt_path=args.ckpt_fpath)
     elif args.stage == 'train_q':
-        trainer.fit(model, data_train)
+        trainer.fit(model, data_train, data_val)
     elif args.stage == 'test':
         trainer.test(model, data_test)
     else:
@@ -79,8 +75,8 @@ if __name__ == '__main__':
     parser.add_argument('--q_reg_mult', type=float, default=0)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=1e-3)
-    parser.add_argument('--n_samples', type=int, default=1000)
     parser.add_argument('--n_steps', type=int, default=1000)
+    parser.add_argument('--n_components', type=int, default=1000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     args = parser.parse_args()
