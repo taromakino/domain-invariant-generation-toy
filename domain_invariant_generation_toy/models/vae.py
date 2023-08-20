@@ -148,8 +148,7 @@ class VAE(pl.LightningModule):
         prob_y0_zc = 1 - prob_y1_zc
         prob_y_zc = torch.hstack((prob_y0_zc, prob_y1_zc))
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
-        log_prob_z = q_z.log_prob(z[:, None, :])
-        log_prob_z = (torch.logsumexp(log_prob_z, dim=1) - np.log(log_prob_z.shape[1])).mean()
+        log_prob_z = q_z.log_prob(z).mean()
         return log_prob_x_z, log_prob_y_zc, log_prob_z
 
     def inference(self, x):
