@@ -121,7 +121,7 @@ class VAE(pl.LightningModule):
         # posterior train
         q_mu, q_cov = load_file(self.q_fpath)
         idxs = self.rng.choice(len(q_mu), self.n_samples, replace=False)
-        q_mu, q_cov = q_mu[idxs], q_cov[idxs]
+        q_mu, q_cov = q_mu[idxs].to(self.device), q_cov[idxs].to(self.device)
         q_z = D.MultivariateNormal(q_mu, scale_tril=q_cov)
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
         nn.init.xavier_normal_(z_param)
