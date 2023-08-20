@@ -107,7 +107,7 @@ class VAE(pl.LightningModule):
 
     def q_dist(self):
         q_categorical_dist = D.Categorical(logits=self.q_logits)
-        q_gaussian_dist = D.MultivariateNormal(self.q_mu, arr_to_cov(self.q_cov))
+        q_gaussian_dist = D.MultivariateNormal(self.q_mu, scale_tril=arr_to_scale_tril(self.q_cov))
         return D.MixtureSameFamily(q_categorical_dist, q_gaussian_dist)
 
     def posterior_reg(self, posterior_dist):
