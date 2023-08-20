@@ -49,6 +49,7 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.q_mu)
         nn.init.xavier_normal_(self.q_cov)
         self.acc = Accuracy('binary')
+        self.set_requires_grad()
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -187,6 +188,36 @@ class VAE(pl.LightningModule):
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             acc = self.acc(y_pred_class, y)
             self.log('test_acc', acc, on_step=True, on_epoch=True)
+
+    def set_requires_grad(self):
+        if self.stage == 'train':
+            self.encoder_mu.requires_grad_(True)
+            self.encoder_cov.requires_grad_(True)
+            self.decoder.requires_grad_(True)
+            self.causal_classifier.requires_grad_(True)
+            self.prior_mu_causal.requires_grad = True
+            self.prior_cov_causal.requires_grad = True
+            self.prior_mu_spurious.requires_grad = True
+            self.prior_cov_spurious.requires_grad = True
+            self.q_logits.requires_grad = False
+            self.q_mu.requires_grad = False
+            self.q_cov.requires_grad = False
+        elif self.stage == 'train_q':
+            self.encoder_mu.requires_grad_(False)
+            self.encoder_cov.requires_grad_(False)
+            self.decoder.requires_grad_(False)
+            self.causal_classifier.requires_grad_(False)
+            self.prior_mu_causal.requires_grad = False
+            self.prior_cov_causal.requires_grad = False
+            self.prior_mu_spurious.requires_grad = False
+            self.prior_cov_spurious.requires_grad = False
+            self.q_logits.requires_grad = True
+            self.q_mu.requires_grad = True
+            self.q_cov.requires_grad = True
+        elif self.stage == 'test':
+            self.freeze()
+        else:
+            raise ValueError
 
     def configure_optimizers(self):
         if self.stage == 'train':
