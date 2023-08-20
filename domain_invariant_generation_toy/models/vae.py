@@ -17,6 +17,7 @@ class VAE(pl.LightningModule):
             q_reg_mult, lr, lr_inference, n_samples, n_steps):
         super().__init__()
         self.save_hyperparameters()
+        self.rng = np.random.RandomState(seed)
         self.stage = stage
         self.z_size = z_size
         self.alpha_train = alpha_train
@@ -119,8 +120,7 @@ class VAE(pl.LightningModule):
         batch_size = len(x)
         # posterior train
         q_mu, q_cov = load_file(self.q_fpath)
-        rng = np.random.RandomState(np.random.get_state())
-        idxs = rng.choice(len(q_mu), self.n_samples, replace=False)
+        idxs = self.rng.choice(len(q_mu), self.n_samples, replace=False)
         q_mu, q_cov = q_mu[idxs], q_cov[idxs]
         q_z = D.MultivariateNormal(q_mu, scale_tril=q_cov)
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
