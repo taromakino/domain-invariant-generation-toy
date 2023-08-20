@@ -190,7 +190,8 @@ class VAE(pl.LightningModule):
 
     def configure_optimizers(self):
         if self.stage == 'train':
-            return Adam([self.encoder_mu, self.encoder_cov, self.decoder, self.causal_classifier, self.prior_mu_causal,
-                self.prior_cov_causal, self.prior_mu_spurious, self.prior_cov_spurious], lr=self.lr)
+            return Adam([self.encoder_mu.parameters(), self.encoder_cov.parameters(), self.decoder.parameters(),
+                self.causal_classifier.parameters(), self.prior_mu_causal, self.prior_cov_causal, self.prior_mu_spurious,
+                self.prior_cov_spurious], lr=self.lr)
         elif self.stage == 'train_q':
             return Adam([self.q_logits, self.q_mu, self.q_cov], lr=self.lr)
