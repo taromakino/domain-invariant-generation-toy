@@ -5,15 +5,14 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from utils.file import load_file
 from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
 from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult,
-            q_reg_mult, lr, lr_inference, n_steps, n_components):
+    def __init__(self, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult, q_reg_mult,
+            n_components, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
@@ -22,9 +21,9 @@ class VAE(pl.LightningModule):
         self.alpha_inference = alpha_inference
         self.posterior_reg_mult = posterior_reg_mult
         self.q_reg_mult = q_reg_mult
+        self.n_components = n_components
         self.lr = lr
         self.lr_inference = lr_inference
-        self.n_components = n_components
         self.n_steps = n_steps
         # q(z_c|x,y,e)
         self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.LeakyReLU)
