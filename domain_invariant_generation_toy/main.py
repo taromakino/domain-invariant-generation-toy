@@ -18,20 +18,24 @@ def make_model(args, x_size):
     else:
         if args.ckpt_fpath is None:
             return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.alpha_train, args.alpha_inference,
-                args.posterior_reg_mult, args.q_reg_mult, args.n_components, args.lr, args.lr_inference, args.n_steps)
+                args.posterior_reg_mult, args.q_reg_mult, args.lr, args.lr_inference, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, q_reg_mult=args.q_reg_mult,
                 lr_inference=args.lr_inference, n_steps=args.n_steps)
 
 
 def make_trainer(args):
-    if args.stage == 'train' or args.stage == 'train_q':
+    if args.stage == 'train':
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
             callbacks=[
                 EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
                 ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
+    elif args.stage == 'train_q':
+        return pl.Trainer(
+            callbacks=[ModelCheckpoint(dirpath=os.path.join(args.dpath, f'version_{args.seed}'), save_last=True)],
+            max_epochs=1)
     else:
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
@@ -72,7 +76,6 @@ if __name__ == '__main__':
     parser.add_argument('--alpha_inference', type=float, default=1)
     parser.add_argument('--posterior_reg_mult', type=float, default=0)
     parser.add_argument('--q_reg_mult', type=float, default=0)
-    parser.add_argument('--n_components', type=int, default=1000)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=1e-3)
     parser.add_argument('--n_steps', type=int, default=1000)
