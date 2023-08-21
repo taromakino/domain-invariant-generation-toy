@@ -41,13 +41,13 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
         # q(z_c)
-        self.q_mu_causal = nn.Parameter(torch.zeros(self.z_size))
-        self.q_cov_causal = nn.Parameter(torch.zeros(size_to_n_tril(self.z_size)))
+        self.q_mu_causal = nn.Parameter(torch.zeros(1, self.z_size))
+        self.q_cov_causal = nn.Parameter(torch.zeros(1, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_causal)
         nn.init.xavier_normal_(self.q_cov_causal)
         # q(z_s)
-        self.q_mu_spurious = nn.Parameter(torch.zeros(self.z_size))
-        self.q_cov_spurious = nn.Parameter(torch.zeros(size_to_n_tril(self.z_size)))
+        self.q_mu_spurious = nn.Parameter(torch.zeros(1, self.z_size))
+        self.q_cov_spurious = nn.Parameter(torch.zeros(1, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_spurious)
         nn.init.xavier_normal_(self.q_cov_spurious)
         self.acc = Accuracy('binary')
@@ -112,13 +112,13 @@ class VAE(pl.LightningModule):
         return D.MultivariateNormal(prior_mu, prior_cov)
 
     def q_causal(self, batch_size):
-        q_mu_causal = torch.repeat_interleave(self.q_mu_causal[None], batch_size, 0)
-        q_cov_causal = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_causal[None], batch_size, 0))
+        q_mu_causal = torch.repeat_interleave(self.q_mu_causal, batch_size, 0)
+        q_cov_causal = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_causal, batch_size, 0))
         return D.MultivariateNormal(q_mu_causal, scale_tril=q_cov_causal)
 
     def q_spurious(self, batch_size):
-        q_mu_spurious = torch.repeat_interleave(self.q_mu_spurious[None], batch_size, 0)
-        q_cov_spurious = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_spurious[None], batch_size, 0))
+        q_mu_spurious = torch.repeat_interleave(self.q_mu_spurious, batch_size, 0)
+        q_cov_spurious = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_spurious, batch_size, 0))
         return D.MultivariateNormal(q_mu_spurious, scale_tril=q_cov_spurious)
 
     def posterior_reg(self, posterior_dist):
