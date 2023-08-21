@@ -199,25 +199,12 @@ class VAE(pl.LightningModule):
             self.prior_cov_causal.requires_grad = True
             self.prior_mu_spurious.requires_grad = True
             self.prior_cov_spurious.requires_grad = True
-            self.q_logits.requires_grad = False
-            self.q_mu.requires_grad = False
-            self.q_cov.requires_grad = False
-        elif self.stage == 'train_q':
-            self.encoder_mu.requires_grad_(False)
-            self.encoder_cov.requires_grad_(False)
-            self.decoder.requires_grad_(False)
-            self.causal_classifier.requires_grad_(False)
-            self.prior_mu_causal.requires_grad = False
-            self.prior_cov_causal.requires_grad = False
-            self.prior_mu_spurious.requires_grad = False
-            self.prior_cov_spurious.requires_grad = False
-            self.q_logits.requires_grad = True
-            self.q_mu.requires_grad = True
-            self.q_cov.requires_grad = True
-        elif self.stage == 'test':
-            self.freeze()
+            self.q_mu_causal.requires_grad = False
+            self.q_cov_causal.requires_grad = False
+            self.q_mu_spurious.requires_grad = False
+            self.q_cov_spurious.requires_grad = False
         else:
-            raise ValueError
+            self.freeze()
 
     def configure_optimizers(self):
         if self.stage == 'train':
