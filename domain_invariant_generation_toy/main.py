@@ -25,18 +25,13 @@ def make_model(args, x_size):
 
 
 def make_trainer(args):
-    if args.stage == 'train':
+    if args.stage == 'train' or args.stage == 'train_q':
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
             callbacks=[
                 EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
                 ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
-    elif args.stage == 'train_q':
-        return pl.Trainer(
-            logger=CSVLogger(args.dpath, name='', version=args.seed),
-            callbacks=[ModelCheckpoint(save_last=True)],
-            max_epochs=1)
     else:
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
