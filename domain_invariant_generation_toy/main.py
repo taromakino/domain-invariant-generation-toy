@@ -54,7 +54,7 @@ def main(args):
     if args.stage == 'train':
         trainer.fit(model, data_train, data_val, ckpt_path=args.ckpt_fpath)
     elif args.stage == 'train_q':
-        trainer.fit(model, data_train, data_val)
+        trainer.fit(model, data_train)
     elif args.stage == 'test':
         trainer.test(model, data_test)
     else:
