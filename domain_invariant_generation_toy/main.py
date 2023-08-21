@@ -34,7 +34,8 @@ def make_trainer(args):
             max_epochs=args.n_epochs)
     elif args.stage == 'train_q':
         return pl.Trainer(
-            callbacks=[ModelCheckpoint(dirpath=os.path.join(args.dpath, f'version_{args.seed}'), save_last=True)],
+            logger=CSVLogger(args.dpath, name='', version=args.seed),
+            callbacks=[ModelCheckpoint(save_last=True)],
             max_epochs=1)
     else:
         return pl.Trainer(
