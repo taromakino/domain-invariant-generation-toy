@@ -43,10 +43,13 @@ class VAE(pl.LightningModule):
         # q(z_c)
         self.q_mu_causal = nn.Parameter(torch.zeros(self.z_size))
         self.q_cov_causal = nn.Parameter(torch.zeros(size_to_n_tril(self.z_size)))
+        nn.init.xavier_normal_(self.q_mu_causal)
+        nn.init.xavier_normal_(self.q_cov_causal)
         # q(z_s)
         self.q_mu_spurious = nn.Parameter(torch.zeros(self.z_size))
         self.q_cov_spurious = nn.Parameter(torch.zeros(size_to_n_tril(self.z_size)))
-        self.z_train = []
+        nn.init.xavier_normal_(self.q_mu_spurious)
+        nn.init.xavier_normal_(self.q_cov_spurious)
         self.acc = Accuracy('binary')
         self.set_requires_grad()
 
