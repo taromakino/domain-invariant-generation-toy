@@ -124,7 +124,7 @@ class VAE(pl.LightningModule):
             self.q_mu_causal.data = zc_train.mean(dim=0).to(self.device)
             self.q_mu_spurious.data = zs_train.mean(dim=0).to(self.device)
             self.q_cov_causal.data = torch.cov(torch.swapaxes(zc_train, 0, 1)).to(self.device)
-            self.q_cov_spurious = torch.cov(torch.swapaxes(zs_train, 0, 1)).to(self.device)
+            self.q_cov_spurious.data = torch.cov(torch.swapaxes(zs_train, 0, 1)).to(self.device)
 
     def validation_step(self, batch, batch_idx):
         if self.stage == 'train':
