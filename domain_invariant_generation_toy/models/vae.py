@@ -43,15 +43,15 @@ class VAE(pl.LightningModule):
         # q(z_c)
         self.q_logits_causal = nn.Parameter(torch.ones(n_components))
         self.q_mu_causal = nn.Parameter(torch.zeros(n_components, self.z_size))
-        self.q_logvar_causal = nn.Parameter(torch.zeros(n_components, self.z_size))
+        self.q_cov_causal = nn.Parameter(torch.zeros(n_components, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_causal)
-        nn.init.xavier_normal_(self.q_logvar_causal)
+        nn.init.xavier_normal_(self.q_cov_causal)
         # q(z_s)
         self.q_logits_spurious = nn.Parameter(torch.ones(n_components))
         self.q_mu_spurious = nn.Parameter(torch.zeros(n_components, self.z_size))
-        self.q_logvar_spurious = nn.Parameter(torch.zeros(n_components, self.z_size))
+        self.q_cov_spurious = nn.Parameter(torch.zeros(n_components, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_spurious)
-        nn.init.xavier_normal_(self.q_logvar_spurious)
+        nn.init.xavier_normal_(self.q_cov_spurious)
         self.acc = Accuracy('binary')
         self.set_requires_grad()
 
@@ -62,7 +62,6 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
-        batch_size = len(x)
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
@@ -114,16 +113,14 @@ class VAE(pl.LightningModule):
         return D.MultivariateNormal(prior_mu, prior_cov)
 
     def q_causal(self):
-        component_dist = D.Categorical(logits=self.q_logits_causal)
-        var = F.softplus(self.q_logvar_causal)
-        gaussian_dist = D.Independent(D.Normal(self.q_mu_causal, var.sqrt()), 1)
-        return D.MixtureSameFamily(component_dist, gaussian_dist)
+        mixture_dist = D.Categorical(logits=self.q_logits_causal)
+        component_dist = D.MultivariateNormal(self.q_mu_causal, scale_tril=arr_to_scale_tril(self.q_cov_causal))
+        return D.MixtureSameFamily(mixture_dist, component_dist)
 
     def q_spurious(self):
-        component_dist = D.Categorical(logits=self.q_logits_spurious)
-        var = F.softplus(self.q_logvar_spurious)
-        gaussian_dist = D.Independent(D.Normal(self.q_mu_spurious, var.sqrt()), 1)
-        return D.MixtureSameFamily(component_dist, gaussian_dist)
+        mixture_dist = D.Categorical(logits=self.q_logits_spurious)
+        component_dist = D.MultivariateNormal(self.q_mu_spurious, scale_tril=arr_to_scale_tril(self.q_cov_spurious))
+        return D.MixtureSameFamily(mixture_dist, component_dist)
 
     def posterior_reg(self, posterior_dist):
         batch_size = len(posterior_dist.loc)
@@ -218,10 +215,10 @@ class VAE(pl.LightningModule):
             self.prior_cov_spurious.requires_grad = True
             self.q_logits_causal.requires_grad = False
             self.q_mu_causal.requires_grad = False
-            self.q_logvar_causal.requires_grad = False
+            self.q_cov_causal.requires_grad = False
             self.q_logits_spurious.requires_grad = False
             self.q_mu_spurious.requires_grad = False
-            self.q_logvar_spurious.requires_grad = False
+            self.q_cov_spurious.requires_grad = False
         elif self.stage == 'train_q':
             self.encoder_mu.requires_grad_(False)
             self.encoder_cov.requires_grad_(False)
@@ -233,10 +230,10 @@ class VAE(pl.LightningModule):
             self.prior_cov_spurious.requires_grad = False
             self.q_logits_causal.requires_grad = True
             self.q_mu_causal.requires_grad = True
-            self.q_logvar_causal.requires_grad = True
+            self.q_cov_causal.requires_grad = True
             self.q_logits_spurious.requires_grad = True
             self.q_mu_spurious.requires_grad = True
-            self.q_logvar_spurious.requires_grad = True
+            self.q_cov_spurious.requires_grad = True
         else:
             self.freeze()
 
