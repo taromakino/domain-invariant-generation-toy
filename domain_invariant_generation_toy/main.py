@@ -20,8 +20,8 @@ def make_model(args, x_size):
             return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.n_components, args.alpha_train,
                 args.alpha_inference, args.posterior_reg_mult, args.q_reg_mult, args.lr, args.lr_inference, args.n_steps)
         else:
-            return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, q_reg_mult=args.q_reg_mult,
-                lr_inference=args.lr_inference, n_steps=args.n_steps)
+            return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, alpha_inference=args.alpha_inference,
+                q_reg_mult=args.q_reg_mult, lr_inference=args.lr_inference, n_steps=args.n_steps)
 
 
 def make_trainer(args):
