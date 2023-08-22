@@ -68,7 +68,7 @@ if __name__ == '__main__':
     parser.add_argument('--is_erm', action='store_true')
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
-    parser.add_argument('--n_components', type=int, default=50)
+    parser.add_argument('--n_components', type=int, default=100)
     parser.add_argument('--alpha_train', type=float, default=1)
     parser.add_argument('--alpha_inference', type=float, default=1)
     parser.add_argument('--posterior_reg_mult', type=float, default=0)

@@ -23,37 +23,53 @@ class VAE(pl.LightningModule):
         self.lr = lr
         self.lr_inference = lr_inference
         self.n_steps = n_steps
+        self.train_params = []
+        self.train_q_params = []
         # q(z_c|x,y,e)
         self.encoder_mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * self.z_size, nn.LeakyReLU)
         self.encoder_cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * self.z_size), nn.LeakyReLU)
+        self.train_params += list(self.encoder_mu.parameters())
+        self.train_params += list(self.encoder_cov.parameters())
         # p(x|z_c, z_s)
         self.decoder = MLP(2 * z_size, h_sizes, x_size, nn.LeakyReLU)
+        self.train_params += list(self.decoder.parameters())
         # p(y|z_c)
         self.causal_classifier = MLP(z_size, h_sizes, 1, nn.LeakyReLU)
+        self.train_params += list(self.causal_classifier.parameters())
         # p(z_c|e)
         self.prior_mu_causal = nn.Parameter(torch.zeros(N_ENVS, self.z_size))
         self.prior_cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_causal)
         nn.init.xavier_normal_(self.prior_cov_causal)
+        self.train_params.append(self.prior_mu_causal)
+        self.train_params.append(self.prior_cov_causal)
         # p(z_s|y,e)
         self.prior_mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, self.z_size))
         self.prior_cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
+        self.train_params.append(self.prior_mu_spurious)
+        self.train_params.append(self.prior_cov_spurious)
         # q(z_c)
         self.q_logits_causal = nn.Parameter(torch.ones(n_components))
         self.q_mu_causal = nn.Parameter(torch.zeros(n_components, self.z_size))
         self.q_cov_causal = nn.Parameter(torch.zeros(n_components, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_causal)
         nn.init.xavier_normal_(self.q_cov_causal)
+        self.train_q_params.append(self.q_logits_causal)
+        self.train_q_params.append(self.q_mu_causal)
+        self.train_q_params.append(self.q_cov_causal)
         # q(z_s)
         self.q_logits_spurious = nn.Parameter(torch.ones(n_components))
         self.q_mu_spurious = nn.Parameter(torch.zeros(n_components, self.z_size))
         self.q_cov_spurious = nn.Parameter(torch.zeros(n_components, size_to_n_tril(self.z_size)))
         nn.init.xavier_normal_(self.q_mu_spurious)
         nn.init.xavier_normal_(self.q_cov_spurious)
+        self.train_q_params.append(self.q_logits_spurious)
+        self.train_q_params.append(self.q_mu_spurious)
+        self.train_q_params.append(self.q_cov_spurious)
         self.acc = Accuracy('binary')
-        self.set_requires_grad()
+        self.configure()
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -203,39 +219,25 @@ class VAE(pl.LightningModule):
             acc = self.acc(y_pred_class, y)
             self.log('test_acc', acc, on_step=True, on_epoch=True)
 
-    def set_requires_grad(self):
+    def configure(self):
         if self.stage == 'train':
-            self.encoder_mu.requires_grad_(True)
-            self.encoder_cov.requires_grad_(True)
-            self.decoder.requires_grad_(True)
-            self.causal_classifier.requires_grad_(True)
-            self.prior_mu_causal.requires_grad = True
-            self.prior_cov_causal.requires_grad = True
-            self.prior_mu_spurious.requires_grad = True
-            self.prior_cov_spurious.requires_grad = True
-            self.q_logits_causal.requires_grad = False
-            self.q_mu_causal.requires_grad = False
-            self.q_cov_causal.requires_grad = False
-            self.q_logits_spurious.requires_grad = False
-            self.q_mu_spurious.requires_grad = False
-            self.q_cov_spurious.requires_grad = False
+            self.train()
+            for params in self.train_params:
+                params.requires_grad = True
+            for params in self.train_q_params:
+                params.requires_grad = False
         elif self.stage == 'train_q':
-            self.encoder_mu.requires_grad_(False)
-            self.encoder_cov.requires_grad_(False)
-            self.decoder.requires_grad_(False)
-            self.causal_classifier.requires_grad_(False)
-            self.prior_mu_causal.requires_grad = False
-            self.prior_cov_causal.requires_grad = False
-            self.prior_mu_spurious.requires_grad = False
-            self.prior_cov_spurious.requires_grad = False
-            self.q_logits_causal.requires_grad = True
-            self.q_mu_causal.requires_grad = True
-            self.q_cov_causal.requires_grad = True
-            self.q_logits_spurious.requires_grad = True
-            self.q_mu_spurious.requires_grad = True
-            self.q_cov_spurious.requires_grad = True
+            self.eval()
+            for params in self.train_params:
+                params.requires_grad = False
+            for params in self.train_q_params:
+                params.requires_grad = True
         else:
-            self.freeze()
+            self.eval()
+            for params in self.train_params:
+                params.requires_grad = False
+            for params in self.train_q_params:
+                params.requires_grad = False
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
