@@ -10,8 +10,8 @@ from data import N_CLASSES, N_ENVS
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, alpha_train, alpha_inference, posterior_reg_mult, q_reg_mult,
-            lr, lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, alpha_train, alpha_inference, posterior_reg_mult,
+            q_reg_mult, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
@@ -41,15 +41,17 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(self.prior_mu_spurious)
         nn.init.xavier_normal_(self.prior_cov_spurious)
         # q(z_c)
-        self.q_mu_causal = nn.Parameter(torch.zeros(1, self.z_size))
-        self.q_cov_causal = nn.Parameter(torch.zeros(1, size_to_n_tril(self.z_size)))
+        self.q_logits_causal = nn.Parameter(torch.ones(n_components))
+        self.q_mu_causal = nn.Parameter(torch.zeros(n_components, self.z_size))
+        self.q_logvar_causal = nn.Parameter(torch.zeros(n_components, self.z_size))
         nn.init.xavier_normal_(self.q_mu_causal)
-        nn.init.xavier_normal_(self.q_cov_causal)
+        nn.init.xavier_normal_(self.q_logvar_causal)
         # q(z_s)
-        self.q_mu_spurious = nn.Parameter(torch.zeros(1, self.z_size))
-        self.q_cov_spurious = nn.Parameter(torch.zeros(1, size_to_n_tril(self.z_size)))
+        self.q_logits_spurious = nn.Parameter(torch.ones(n_components))
+        self.q_mu_spurious = nn.Parameter(torch.zeros(n_components, self.z_size))
+        self.q_logvar_spurious = nn.Parameter(torch.zeros(n_components, self.z_size))
         nn.init.xavier_normal_(self.q_mu_spurious)
-        nn.init.xavier_normal_(self.q_cov_spurious)
+        nn.init.xavier_normal_(self.q_logvar_spurious)
         self.acc = Accuracy('binary')
         self.set_requires_grad()
 
@@ -80,8 +82,8 @@ class VAE(pl.LightningModule):
             posterior_reg = self.posterior_reg(posterior_dist).mean()
             return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
         elif self.stage == 'train_q':
-            q_causal = self.q_causal(batch_size)
-            q_spurious = self.q_spurious(batch_size)
+            q_causal = self.q_causal()
+            q_spurious = self.q_spurious()
             log_prob_zc = q_causal.log_prob(z_c).mean()
             log_prob_zs = q_spurious.log_prob(z_s).mean()
             log_prob_z = log_prob_zc + log_prob_zs
@@ -111,15 +113,17 @@ class VAE(pl.LightningModule):
         prior_cov[:, self.z_size:, self.z_size:] = prior_cov_spurious
         return D.MultivariateNormal(prior_mu, prior_cov)
 
-    def q_causal(self, batch_size):
-        q_mu_causal = torch.repeat_interleave(self.q_mu_causal, batch_size, 0)
-        q_cov_causal = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_causal, batch_size, 0))
-        return D.MultivariateNormal(q_mu_causal, scale_tril=q_cov_causal)
+    def q_causal(self):
+        component_dist = D.Categorical(logits=self.q_logits_causal)
+        var = F.softplus(self.q_logvar_causal)
+        gaussian_dist = D.Independent(D.Normal(self.q_mu_causal, var.sqrt()), 1)
+        return D.MixtureSameFamily(component_dist, gaussian_dist)
 
-    def q_spurious(self, batch_size):
-        q_mu_spurious = torch.repeat_interleave(self.q_mu_spurious, batch_size, 0)
-        q_cov_spurious = arr_to_scale_tril(torch.repeat_interleave(self.q_cov_spurious, batch_size, 0))
-        return D.MultivariateNormal(q_mu_spurious, scale_tril=q_cov_spurious)
+    def q_spurious(self):
+        component_dist = D.Categorical(logits=self.q_logits_spurious)
+        var = F.softplus(self.q_logvar_spurious)
+        gaussian_dist = D.Independent(D.Normal(self.q_mu_spurious, var.sqrt()), 1)
+        return D.MixtureSameFamily(component_dist, gaussian_dist)
 
     def posterior_reg(self, posterior_dist):
         batch_size = len(posterior_dist.loc)
@@ -167,8 +171,8 @@ class VAE(pl.LightningModule):
 
     def inference(self, x):
         batch_size = len(x)
-        q_causal = self.q_causal(batch_size)
-        q_spurious = self.q_spurious(batch_size)
+        q_causal = self.q_causal()
+        q_spurious = self.q_spurious()
         z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
         nn.init.xavier_normal_(z_param)
         optim = Adam([z_param], lr=self.lr_inference)
@@ -212,10 +216,12 @@ class VAE(pl.LightningModule):
             self.prior_cov_causal.requires_grad = True
             self.prior_mu_spurious.requires_grad = True
             self.prior_cov_spurious.requires_grad = True
+            self.q_logits_causal.requires_grad = False
             self.q_mu_causal.requires_grad = False
-            self.q_cov_causal.requires_grad = False
+            self.q_logvar_causal.requires_grad = False
+            self.q_logits_spurious.requires_grad = False
             self.q_mu_spurious.requires_grad = False
-            self.q_cov_spurious.requires_grad = False
+            self.q_logvar_spurious.requires_grad = False
         elif self.stage == 'train_q':
             self.encoder_mu.requires_grad_(False)
             self.encoder_cov.requires_grad_(False)
@@ -225,10 +231,12 @@ class VAE(pl.LightningModule):
             self.prior_cov_causal.requires_grad = False
             self.prior_mu_spurious.requires_grad = False
             self.prior_cov_spurious.requires_grad = False
+            self.q_logits_causal.requires_grad = True
             self.q_mu_causal.requires_grad = True
-            self.q_cov_causal.requires_grad = True
+            self.q_logvar_causal.requires_grad = True
+            self.q_logits_spurious.requires_grad = True
             self.q_mu_spurious.requires_grad = True
-            self.q_cov_spurious.requires_grad = True
+            self.q_logvar_spurious.requires_grad = True
         else:
             self.freeze()
 
