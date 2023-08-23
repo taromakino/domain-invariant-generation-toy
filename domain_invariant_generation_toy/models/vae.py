@@ -108,7 +108,7 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.causal_classifier = MLP(z_size, h_sizes, 1, nn.LeakyReLU)
         self.train_params += list(self.causal_classifier.parameters())
-        # p(z_c|e)
+        # p(z_c,z_s|y,e)
         self.prior = Prior(z_size)
         self.train_params += list(self.prior.parameters())
         # q(z_c)
@@ -219,13 +219,15 @@ class VAE(pl.LightningModule):
         with torch.set_grad_enabled(True):
             x, y = batch
             y_pred, log_prob_x_z, log_prob_y_zc, log_prob_z, loss = self.inference(x)
-            self.log('test_log_prob_x_z', log_prob_x_z, on_step=True, on_epoch=True)
-            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=True, on_epoch=True)
-            self.log('test_log_prob_z', log_prob_z, on_step=True, on_epoch=True)
-            self.log('test_loss', loss, on_step=True, on_epoch=True)
+            self.log('test_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+            self.log('test_log_prob_z', log_prob_z, on_step=False, on_epoch=True)
+            self.log('test_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
-            acc = self.acc(y_pred_class, y)
-            self.log('test_acc', acc, on_step=True, on_epoch=True)
+            self.acc.update(y_pred_class, y.long())
+
+    def on_test_epoch_end(self):
+        self.log('test_acc', self.acc.compute())
 
     def configure_grad(self):
         if self.stage == 'train':
