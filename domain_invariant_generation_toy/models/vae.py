@@ -181,40 +181,47 @@ class VAE(pl.LightningModule):
             loss = -log_prob_z
             self.log('val_loss', loss, on_step=False, on_epoch=True)
 
-    def inference_loss(self, z_c):
+    def inference_loss(self, x, z):
+        log_prob_x_z = self.decoder(x, z).mean()
+        z_c, z_s = torch.chunk(z, 2, dim=1)
         prob_y_pos_zc = torch.sigmoid(self.causal_classifier(z_c))
         prob_y_neg_zc = 1 - prob_y_pos_zc
         prob_y_zc = torch.hstack((prob_y_neg_zc, prob_y_pos_zc))
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
         log_prob_zc = self.q_causal(z_c).mean()
-        return log_prob_y_zc, log_prob_zc
+        log_prob_zs = self.q_spurious(z_s).mean()
+        log_prob_z = log_prob_zc + log_prob_zs
+        return log_prob_x_z, log_prob_y_zc, log_prob_z
 
     def inference(self, x):
         batch_size = len(x)
-        zc_param = nn.Parameter(torch.zeros(batch_size, self.z_size, device=self.device))
-        nn.init.xavier_normal_(zc_param)
-        optim = Adam([zc_param], lr=self.lr_inference)
+        z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size, device=self.device))
+        nn.init.xavier_normal_(z_param)
+        optim = Adam([z_param], lr=self.lr_inference)
         optim_loss = torch.inf
-        optim_log_prob_y_zc = optim_log_prob_zc = optim_zc = None
+        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z = optim_z = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            log_prob_y_zc, log_prob_zc = self.inference_loss(zc_param)
-            loss = -log_prob_y_zc - self.q_reg_mult * log_prob_zc
+            log_prob_x_z, log_prob_y_zc, log_prob_z = self.inference_loss(x, z_param)
+            loss = -log_prob_x_z - self.alpha_inference * log_prob_y_zc - self.q_reg_mult * log_prob_z
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
+                optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
-                optim_log_prob_zc = log_prob_zc
-                optim_zc = zc_param.clone()
-        return self.causal_classifier(optim_zc), optim_log_prob_y_zc, optim_log_prob_zc, optim_loss
+                optim_log_prob_z = log_prob_z
+                optim_z = z_param.clone()
+        optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
+        return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
 
     def test_step(self, batch, batch_idx):
         with torch.set_grad_enabled(True):
             x, y = batch
-            y_pred, log_prob_y_zc, log_prob_zc, loss = self.inference(x)
+            y_pred, log_prob_x_z, log_prob_y_zc, log_prob_z, loss = self.inference(x)
+            self.log('test_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
             self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-            self.log('test_log_prob_zc', log_prob_zc, on_step=False, on_epoch=True)
+            self.log('test_log_prob_z', log_prob_z, on_step=False, on_epoch=True)
             self.log('test_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.acc.update(y_pred_class, y.long())
