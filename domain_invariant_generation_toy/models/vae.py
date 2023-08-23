@@ -195,7 +195,7 @@ class VAE(pl.LightningModule):
         nn.init.xavier_normal_(zc_param)
         optim = Adam([zc_param], lr=self.lr_inference)
         optim_loss = torch.inf
-        optim_log_prob_y_zc = optim_log_prob_zc = optim_z = None
+        optim_log_prob_y_zc = optim_log_prob_zc = optim_zc = None
         for _ in range(self.n_steps):
             optim.zero_grad()
             log_prob_y_zc, log_prob_zc = self.inference_loss(zc_param)
@@ -206,8 +206,7 @@ class VAE(pl.LightningModule):
                 optim_loss = loss
                 optim_log_prob_y_zc = log_prob_y_zc
                 optim_log_prob_zc = log_prob_zc
-                optim_z = zc_param.clone()
-        optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
+                optim_zc = zc_param.clone()
         return self.causal_classifier(optim_zc), optim_log_prob_y_zc, optim_log_prob_zc, optim_loss
 
     def test_step(self, batch, batch_idx):
