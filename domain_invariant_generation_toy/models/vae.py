@@ -84,14 +84,15 @@ class AggregatedPosterior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, alpha_train, alpha_inference, posterior_reg_mult,
-            q_reg_mult, lr, lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, alpha_train, alpha_inference, beta,
+            posterior_reg_mult, q_reg_mult, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
         self.alpha_train = alpha_train
         self.alpha_inference = alpha_inference
+        self.beta = beta
         self.posterior_reg_mult = posterior_reg_mult
         self.q_reg_mult = q_reg_mult
         self.lr = lr
@@ -160,7 +161,8 @@ class VAE(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
             log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + self.beta * kl + self.posterior_reg_mult * \
+                posterior_reg
             return loss
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
@@ -170,7 +172,8 @@ class VAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         if self.stage == 'train':
             log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + kl + self.posterior_reg_mult * posterior_reg
+            loss = -log_prob_x_z - self.alpha_train * log_prob_y_zc + self.beta * kl + self.posterior_reg_mult * \
+                posterior_reg
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
             self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('val_kl', kl, on_step=False, on_epoch=True)
