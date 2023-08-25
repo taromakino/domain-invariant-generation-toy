@@ -17,7 +17,7 @@ def make_model(args, x_size):
             return ERM.load_from_checkpoint(args.ckpt_fpath)
     else:
         if args.ckpt_fpath is None:
-            return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.x_mult, args.n_components, args.lr,
+            return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.n_components, args.x_mult, args.lr,
                 args.lr_inference, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, lr_inference=args.lr_inference,
