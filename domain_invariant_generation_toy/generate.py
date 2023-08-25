@@ -10,11 +10,11 @@ from utils.file import load_file
 from models.vae import VAE
 
 
-def log_prob_yzc(vae, y, z_c, alpha_generate):
+def log_prob_yzc(vae, y, z_c):
     y_pred = vae.causal_classifier(z_c)
     log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
     log_prob_zc = vae.q_causal(z_c).mean()
-    return alpha_generate * log_prob_y_zc + log_prob_zc
+    return log_prob_y_zc + log_prob_zc
 
 
 def main(args):
@@ -25,9 +25,7 @@ def main(args):
     vae.freeze()
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
-    y_idx_train = y_train.int()[:, 0]
-    e_idx_train = e_train.int()[:, 0]
-    posterior_dist = vae.posterior_dist(x_train, y_idx_train, e_idx_train)
+    posterior_dist = vae.encoder(x_train, y_train, e_train)
     z = posterior_dist.loc
     for example_idx in range(args.n_examples):
         x_seed, y_seed, z_seed = x_train[[example_idx]], y_train[[example_idx]], z[[example_idx]]
@@ -38,7 +36,7 @@ def main(args):
         plot = PLOT[existing_args.dataset]
         image_size = IMAGE_SHAPE[existing_args.dataset]
         plot(axes[0], x_seed.reshape(image_size).detach().cpu().numpy())
-        x_pred = torch.sigmoid(vae.decoder(z_seed))
+        x_pred = torch.sigmoid(vae.decoder.mlp(z_seed))
         plot(axes[1], x_pred.reshape(image_size).detach().cpu().numpy())
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         zc_param = zc_seed.clone().requires_grad_()
@@ -46,10 +44,10 @@ def main(args):
         for col_idx in range(2, args.n_cols):
             for _ in range(args.n_steps_per_col):
                 optimizer.zero_grad()
-                loss = -log_prob_yzc(vae, 1 - y_seed, zc_param, args.alpha_generate)
+                loss = -log_prob_yzc(vae, 1 - y_seed, zc_param)
                 loss.backward()
                 optimizer.step()
-            x_perturb = torch.sigmoid(vae.decoder(torch.hstack((zc_param, zs_seed))))
+            x_perturb = torch.sigmoid(vae.decoder.mlp(torch.hstack((zc_param, zs_seed))))
             plot(axes[col_idx], x_perturb.reshape(image_size).detach().cpu().numpy())
         fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate')
         os.makedirs(fig_dpath, exist_ok=True)
@@ -60,7 +58,6 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--dpath', type=str, required=True)
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--alpha_generate', type=float, default=1)
     parser.add_argument('--lr_generate', type=float, default=0.01)
     parser.add_argument('--n_steps_per_col', type=int, default=5000)
     parser.add_argument('--n_cols', type=int, default=10)

@@ -9,9 +9,9 @@ from models.vae import VAE
 from utils.file import load_file
 
 
-def sample_prior(rng, vae, y_train, e_idx_train):
-    idx = rng.choice(len(y_train), 1)
-    prior_dist = vae.prior_dist(y_train[idx], e_idx_train[idx])
+def sample_prior(rng, vae, y, e):
+    idx = rng.choice(len(y), 1)
+    prior_dist = vae.prior(y[idx], e[idx])
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
 
@@ -24,11 +24,9 @@ def main(args):
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
-    y_idx_train = y_train.int()[:, 0]
-    e_idx_train = e_train.int()[:, 0]
     for example_idx in range(args.n_examples):
-        x_seed, y_idx_seed, e_idx_seed = x_train[[example_idx]], y_idx_train[[example_idx]], e_idx_train[[example_idx]]
-        posterior_dist_seed = vae.posterior_dist(x_seed, y_idx_seed, e_idx_seed)
+        x_seed, y_seed, e_seed = x_train[[example_idx]], y_train[[example_idx]], e_train[[example_idx]]
+        posterior_dist_seed = vae.encoder(x_seed, y_seed, e_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, args.n_cols, figsize=(2 * args.n_cols, 2 * 2))
@@ -39,13 +37,13 @@ def main(args):
         image_size = IMAGE_SHAPE[existing_args.dataset]
         plot(axes[0, 0], x_seed.reshape(image_size).detach().cpu().numpy())
         plot(axes[1, 0], x_seed.reshape(image_size).detach().cpu().numpy())
-        x_pred = torch.sigmoid(vae.decoder(z_seed))
+        x_pred = torch.sigmoid(vae.decoder.mlp(z_seed))
         plot(axes[0, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         plot(axes[1, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         for col_idx in range(2, args.n_cols):
-            zc_sample, zs_sample = sample_prior(rng, vae, y_idx_train, e_idx_train)
-            x_pred_causal = torch.sigmoid(vae.decoder(torch.hstack((zc_sample, zs_seed))))
-            x_pred_spurious = torch.sigmoid(vae.decoder(torch.hstack((zc_seed, zs_sample))))
+            zc_sample, zs_sample = sample_prior(rng, vae, y_train, e_train)
+            x_pred_causal = torch.sigmoid(vae.decoder.mlp(torch.hstack((zc_sample, zs_seed))))
+            x_pred_spurious = torch.sigmoid(vae.decoder.mlp(torch.hstack((zc_seed, zs_sample))))
             plot(axes[0, col_idx], x_pred_causal.reshape(image_size).detach().cpu().numpy())
             plot(axes[1, col_idx], x_pred_spurious.reshape(image_size).detach().cpu().numpy())
         fig_dpath = os.path.join(args.dpath, f'version_{args.seed}', 'fig', 'generate_from_prior')
