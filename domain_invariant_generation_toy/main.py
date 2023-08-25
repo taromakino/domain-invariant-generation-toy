@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=1e-3)
     parser.add_argument('--n_steps', type=int, default=1000)
-    parser.add_argument('--n_epochs', type=int, default=500)
+    parser.add_argument('--n_epochs', type=int, default=200)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     args = parser.parse_args()
     main(args)
