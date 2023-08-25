@@ -17,8 +17,8 @@ def make_model(args, x_size):
             return ERM.load_from_checkpoint(args.ckpt_fpath)
     else:
         if args.ckpt_fpath is None:
-            return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.n_components, args.x_mult, args.lr,
-                args.lr_inference, args.n_steps)
+            return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.n_components, args.xy_mult, args.lr,
+                       args.lr_inference, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, lr_inference=args.lr_inference,
                 n_steps=args.n_steps)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[128, 128])
     parser.add_argument('--n_components', type=int, default=100)
-    parser.add_argument('--x_mult', type=float, default=1)
+    parser.add_argument('--xy_mult', type=float, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=1e-3)
     parser.add_argument('--n_steps', type=int, default=1000)
