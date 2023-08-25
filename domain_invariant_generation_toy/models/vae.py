@@ -36,7 +36,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        return -F.binary_cross_entropy_with_logits(x_pred, x)
 
 
 class Prior(nn.Module):
