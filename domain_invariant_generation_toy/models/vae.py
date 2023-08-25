@@ -100,7 +100,6 @@ class VAE(pl.LightningModule):
         self.n_steps = n_steps
         self.train_params = []
         self.train_q_params = []
-        self.train_bn = nn.BatchNorm1d(4)
         # q(z_c|x,y,e)
         self.encoder = Encoder(x_size, z_size, h_sizes)
         self.train_params += list(self.encoder.parameters())
@@ -129,24 +128,24 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
-        # z_c,z_s ~ q(z_c,z_s|x,y,e)
-        posterior_dist = self.encoder(x, y, e)
-        z = self.sample_z(posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         if self.stage == 'train':
+            # z_c,z_s ~ q(z_c,z_s|x,y,e)
+            posterior_dist = self.encoder(x, y, e)
+            z = self.sample_z(posterior_dist)
+            z_c, z_s = torch.chunk(z, 2, dim=1)
             # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-            log_prob_x_z = self.decoder(x, z)
+            log_prob_x_z = self.decoder(x, z).mean()
             # E_q(z_c|x,y,e)[log p(y|z_c)]
             y_pred = self.causal_classifier(z_c)
-            log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y, reduction='none')
+            log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
             prior_dist = self.prior(y, e)
-            kl = D.kl_divergence(posterior_dist, prior_dist)
-            posterior_reg = self.posterior_reg(posterior_dist)
-            out = torch.hstack((log_prob_x_z[:, None], log_prob_y_zc, kl[:, None], posterior_reg[:, None]))
-            out = self.train_bn(out)
-            return out.mean(dim=0)
+            kl = D.kl_divergence(posterior_dist, prior_dist).mean()
+            posterior_reg = self.posterior_reg(posterior_dist).mean()
+            return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
         elif self.stage == 'train_q':
+            posterior_dist = self.encoder(x, y, e)
+            z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
             log_prob_zc = self.q_causal(z_c).mean()
             log_prob_zs = self.q_spurious(z_s).mean()
             log_prob_z = log_prob_zc + log_prob_zs
