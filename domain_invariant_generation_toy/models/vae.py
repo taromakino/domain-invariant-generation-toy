@@ -128,11 +128,11 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def forward(self, x, y, e):
-        # z_c,z_s ~ q(z_c,z_s|x,y,e)
-        posterior_dist = self.encoder(x, y, e)
-        z = self.sample_z(posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         if self.stage == 'train':
+            # z_c,z_s ~ q(z_c,z_s|x,y,e)
+            posterior_dist = self.encoder(x, y, e)
+            z = self.sample_z(posterior_dist)
+            z_c, z_s = torch.chunk(z, 2, dim=1)
             # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
             log_prob_x_z = self.decoder(x, z).mean()
             # E_q(z_c|x,y,e)[log p(y|z_c)]
@@ -144,6 +144,8 @@ class VAE(pl.LightningModule):
             posterior_reg = self.posterior_reg(posterior_dist).mean()
             return log_prob_x_z, log_prob_y_zc, kl, posterior_reg
         elif self.stage == 'train_q':
+            prior_dist = self.prior(y, e)
+            z_c, z_s = torch.chunk(prior_dist.loc, 2, dim=1)
             log_prob_zc = self.q_causal(z_c).mean()
             log_prob_zs = self.q_spurious(z_s).mean()
             log_prob_z = log_prob_zc + log_prob_zs
