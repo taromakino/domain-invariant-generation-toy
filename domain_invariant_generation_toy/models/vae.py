@@ -36,7 +36,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x)
+        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
 
 
 class Prior(nn.Module):
@@ -67,6 +67,7 @@ class Prior(nn.Module):
         cov[:, self.z_size:, self.z_size:] = cov_spurious
         return D.MultivariateNormal(mu, cov)
 
+
 class AggregatedPosterior(nn.Module):
     def __init__(self, z_size, n_components):
         super().__init__()
@@ -84,15 +85,13 @@ class AggregatedPosterior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, x_mult_train, y_mult_train, x_mult_inference,
-            y_mult_inference, lr, lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, y_mult_train, y_mult_inference, lr, lr_inference,
+                 n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
-        self.x_mult_train = x_mult_train
         self.y_mult_train = y_mult_train
-        self.x_mult_inference = x_mult_inference
         self.y_mult_inference = y_mult_inference
         self.lr = lr
         self.lr_inference = lr_inference
@@ -141,7 +140,7 @@ class VAE(pl.LightningModule):
             prior_dist = self.prior(y, e)
             kl = D.kl_divergence(posterior_dist, prior_dist).mean()
             posterior_reg = self.posterior_reg(posterior_dist).mean()
-            return self.x_mult_train * log_prob_x_z, self.y_mult_train * log_prob_y_zc, kl, posterior_reg
+            return log_prob_x_z, self.y_mult_train * log_prob_y_zc, kl, posterior_reg
         elif self.stage == 'train_q':
             posterior_dist = self.encoder(x, y, e)
             z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
@@ -193,7 +192,7 @@ class VAE(pl.LightningModule):
         log_prob_zc = self.q_causal(z_c).mean()
         log_prob_zs = self.q_spurious(z_s).mean()
         log_prob_z = log_prob_zc + log_prob_zs
-        return self.x_mult_inference * log_prob_x_z, self.y_mult_inference * log_prob_y_zc, log_prob_z
+        return log_prob_x_z, self.y_mult_inference * log_prob_y_zc, log_prob_z
 
     def inference(self, x):
         batch_size = len(x)
