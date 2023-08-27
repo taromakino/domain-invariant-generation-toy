@@ -76,5 +76,6 @@ if __name__ == '__main__':
     parser.add_argument('--n_steps', type=int, default=1000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
+    parser.add_argument('--weight_decay', type=float, default=1e-3)
     args = parser.parse_args()
     main(args)
