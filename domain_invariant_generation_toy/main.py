@@ -18,7 +18,7 @@ def make_model(args, x_size):
     else:
         if args.ckpt_fpath is None:
             return VAE(args.stage, x_size, args.z_size, args.h_sizes, args.n_components,  args.y_mult_train,
-                args.y_mult_inference, args.lr, args.lr_inference, args.n_steps)
+                args.y_mult_inference, args.prior_reg_mult, args.lr, args.lr_inference, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, y_mult_inference=args.y_mult_inference,
                 lr_inference=args.lr_inference, n_steps=args.n_steps)
