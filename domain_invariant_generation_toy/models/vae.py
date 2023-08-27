@@ -85,18 +85,18 @@ class AggregatedPosterior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, lr, lr_inference, n_steps,
-            weight_decay):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, weight_decay, lr,
+            lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
         self.prior_reg_mult = prior_reg_mult
         self.q_mult = q_mult
+        self.weight_decay = weight_decay
         self.lr = lr
         self.lr_inference = lr_inference
         self.n_steps = n_steps
-        self.weight_decay = weight_decay
         self.train_params = []
         self.train_q_params = []
         # q(z_c|x,y,e)
