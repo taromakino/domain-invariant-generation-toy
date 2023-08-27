@@ -85,15 +85,13 @@ class AggregatedPosterior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, y_mult_train, y_mult_inference, prior_reg_mult,
-            lr, lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
-        self.y_mult_train = y_mult_train
-        self.y_mult_inference = y_mult_inference
         self.prior_reg_mult = prior_reg_mult
+        self.q_mult = q_mult
         self.lr = lr
         self.lr_inference = lr_inference
         self.n_steps = n_steps
@@ -141,7 +139,7 @@ class VAE(pl.LightningModule):
             prior_dist = self.prior(y, e)
             kl = D.kl_divergence(posterior_dist, prior_dist).mean()
             prior_reg = self.prior_reg(prior_dist).mean()
-            return log_prob_x_z, self.y_mult_train * log_prob_y_zc, kl, self.prior_reg_mult * prior_reg
+            return log_prob_x_z, log_prob_y_zc, kl, self.prior_reg_mult * prior_reg
         elif self.stage == 'train_q':
             posterior_dist = self.encoder(x, y, e)
             z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
@@ -193,7 +191,7 @@ class VAE(pl.LightningModule):
         log_prob_zc = self.q_causal(z_c).mean()
         log_prob_zs = self.q_spurious(z_s).mean()
         log_prob_z = log_prob_zc + log_prob_zs
-        return log_prob_x_z, self.y_mult_inference * log_prob_y_zc, log_prob_z
+        return log_prob_x_z, log_prob_y_zc, self.q_mult * log_prob_z
 
     def inference(self, x):
         batch_size = len(x)
