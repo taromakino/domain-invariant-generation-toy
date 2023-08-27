@@ -71,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_components', type=int, default=10)
     parser.add_argument('--prior_reg_mult', type=float, default=1e-5)
     parser.add_argument('--q_mult', type=float, default=1e-5)
-    parser.add_argument('--weight_decay', type=float, default=1e-3)
+    parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=1e-3)
     parser.add_argument('--n_steps', type=int, default=1000)
