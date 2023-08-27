@@ -85,14 +85,15 @@ class AggregatedPosterior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, y_mult_train, y_mult_inference, lr, lr_inference,
-                 n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, y_mult_train, y_mult_inference, prior_reg_mult,
+            lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
         self.z_size = z_size
         self.y_mult_train = y_mult_train
         self.y_mult_inference = y_mult_inference
+        self.prior_reg_mult = prior_reg_mult
         self.lr = lr
         self.lr_inference = lr_inference
         self.n_steps = n_steps
@@ -139,8 +140,8 @@ class VAE(pl.LightningModule):
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
             prior_dist = self.prior(y, e)
             kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-            posterior_reg = self.posterior_reg(posterior_dist).mean()
-            return log_prob_x_z, self.y_mult_train * log_prob_y_zc, kl, posterior_reg
+            prior_reg = self.prior_reg(prior_dist).mean()
+            return log_prob_x_z, self.y_mult_train * log_prob_y_zc, kl, self.prior_reg_mult * prior_reg
         elif self.stage == 'train_q':
             posterior_dist = self.encoder(x, y, e)
             z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
@@ -151,17 +152,17 @@ class VAE(pl.LightningModule):
         else:
             raise ValueError
 
-    def posterior_reg(self, posterior_dist):
-        batch_size = len(posterior_dist.loc)
-        mu = torch.zeros_like(posterior_dist.loc).to(self.device)
+    def prior_reg(self, prior_dist):
+        batch_size = len(prior_dist.loc)
+        mu = torch.zeros_like(prior_dist.loc).to(self.device)
         cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
         standard_normal = D.MultivariateNormal(mu, cov)
-        return D.kl_divergence(posterior_dist, standard_normal)
+        return D.kl_divergence(prior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
-            log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - log_prob_y_zc + kl + posterior_reg
+            log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
+            loss = -log_prob_x_z - log_prob_y_zc + kl + prior_reg
             return loss
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
@@ -170,12 +171,12 @@ class VAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         if self.stage == 'train':
-            log_prob_x_z, log_prob_y_zc, kl, posterior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - log_prob_y_zc + kl + posterior_reg
+            log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
+            loss = -log_prob_x_z - log_prob_y_zc + kl + prior_reg
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
             self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('val_kl', kl, on_step=False, on_epoch=True)
-            self.log('posterior_reg', posterior_reg, on_step=False, on_epoch=True)
+            self.log('prior_reg', prior_reg, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
