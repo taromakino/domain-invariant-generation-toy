@@ -11,9 +11,8 @@ from utils.file import load_file
 
 def sample_prior(rng, vae, y, e):
     idx = rng.choice(len(y), 1)
-    prior_dist = vae.prior(y[idx], e[idx])
-    z_sample = prior_dist.sample()
-    return torch.chunk(z_sample, 2, dim=1)
+    prior_causal_dist, prior_spurious_dist = vae.prior(y[idx], e[idx])
+    return prior_causal_dist.sample(), prior_spurious_dist.sample()
 
 
 def main(args):
@@ -21,7 +20,7 @@ def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'), map_location='cpu')
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
     for example_idx in range(args.n_examples):
