@@ -43,16 +43,13 @@ class Prior(nn.Module):
         self.cov_spurious = MLP(1 + 1, h_sizes, size_to_n_tril(z_size), nn.LeakyReLU)
 
     def forward(self, y, e):
-        batch_size = len(y)
         mu_causal = self.mu_causal(e)
+        cov_causal = arr_to_scale_tril(self.cov_causal(e))
+        dist_causal = D.MultivariateNormal(mu_causal, scale_tril=cov_causal)
         mu_spurious = self.mu_spurious(y, e)
-        mu = torch.hstack((mu_causal, mu_spurious))
-        cov_causal = arr_to_cov(self.cov_causal(e))
-        cov_spurious = arr_to_cov(self.cov_spurious(y, e))
-        cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=y.device)
-        cov[:, :self.z_size, :self.z_size] = cov_causal
-        cov[:, self.z_size:, self.z_size:] = cov_spurious
-        return D.MultivariateNormal(mu, cov)
+        cov_spurious = arr_to_scale_tril(self.cov_spurious(y, e))
+        dist_spurious = D.MultivariateNormal(mu_spurious, scale_tril=cov_spurious)
+        return dist_causal, dist_spurious
 
 
 class AggregatedPosterior(nn.Module):
@@ -126,10 +123,16 @@ class VAE(pl.LightningModule):
             y_pred = self.causal_classifier(z_c)
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
-            prior_dist = self.prior(y, e)
-            kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-            prior_reg = self.prior_reg(prior_dist).mean()
-            return log_prob_x_z, self.y_mult * log_prob_y_zc, kl, self.prior_reg_mult * prior_reg
+            prior_dist_causal, prior_dist_spurious = self.prior(y, e)
+            log_prob_zc_e = prior_dist_causal.log_prob(z_c).mean()
+            log_prob_zs_ye = prior_dist_spurious.log_prob(z_s).mean()
+            entropy = posterior_dist.entropy().mean()
+            prior_reg_causal = self.prior_reg(prior_dist_causal).mean()
+            prior_reg_spurious = self.prior_reg(prior_dist_spurious).mean()
+            prior_reg = prior_reg_causal + prior_reg_spurious
+            elbo = log_prob_x_z + log_prob_y_zc + log_prob_zc_e + log_prob_zs_ye + entropy
+            loss = -elbo + self.prior_reg_mult * prior_reg
+            return loss
         elif self.stage == 'train_q':
             posterior_dist = self.encoder(x, y, e)
             z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
@@ -143,14 +146,13 @@ class VAE(pl.LightningModule):
     def prior_reg(self, prior_dist):
         batch_size = len(prior_dist.loc)
         mu = torch.zeros_like(prior_dist.loc).to(self.device)
-        cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
+        cov = torch.eye(self.z_size).expand(batch_size, self.z_size, self.z_size).to(self.device)
         standard_normal = D.MultivariateNormal(mu, cov)
         return D.kl_divergence(prior_dist, standard_normal)
 
     def training_step(self, batch, batch_idx):
         if self.stage == 'train':
-            log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - log_prob_y_zc + kl + prior_reg
+            loss = self.forward(*batch)
             return loss
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
@@ -159,12 +161,7 @@ class VAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         if self.stage == 'train':
-            log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.forward(*batch)
-            loss = -log_prob_x_z - log_prob_y_zc + kl + prior_reg
-            self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-            self.log('val_kl', kl, on_step=False, on_epoch=True)
-            self.log('prior_reg', prior_reg, on_step=False, on_epoch=True)
+            loss = self.forward(*batch)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
