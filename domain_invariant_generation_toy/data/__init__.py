@@ -2,9 +2,6 @@ import data.colored_mnist
 import data.dsprites
 from utils.plot import plot_grayscale_image, plot_red_green_image
 
-N_CLASSES = 2
-N_ENVS = 2
-
 
 MAKE_DATA = {
     'colored_mnist': data.colored_mnist.make_data,
