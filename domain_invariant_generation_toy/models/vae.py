@@ -135,7 +135,7 @@ class VAE(pl.LightningModule):
             # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
             log_prob_x_z = self.decoder(x, z).mean()
             # E_q(z_c|x,y,e)[log p(y|z_c)]
-            y_pred = self.causal_classifier(z_c)
+            y_pred = self.causal_classifier(z_c.detach())
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
             prior_dist = self.prior(y, e)
