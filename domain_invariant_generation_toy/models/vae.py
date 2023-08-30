@@ -13,18 +13,19 @@ class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
         self.z_size = z_size
-        self.mu = MLP(x_size, h_sizes, N_ENVS * 2 * z_size, nn.LeakyReLU)
-        self.cov = MLP(x_size, h_sizes, N_ENVS * size_to_n_tril(2 * z_size), nn.LeakyReLU)
+        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size, nn.LeakyReLU)
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size), nn.LeakyReLU)
 
-    def forward(self, x, e):
+    def forward(self, x, y, e):
         batch_size = len(x)
+        y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         mu = self.mu(x)
-        mu = mu.reshape(batch_size, N_ENVS, 2 * self.z_size)
-        mu = mu[torch.arange(batch_size), e_idx, :]
+        mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
+        mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
         cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_ENVS, size_to_n_tril(2 * self.z_size))
-        cov = arr_to_scale_tril(cov[torch.arange(batch_size), e_idx, :])
+        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, size_to_n_tril(2 * self.z_size))
+        cov = arr_to_scale_tril(cov[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(mu, scale_tril=cov)
 
 
@@ -128,13 +129,13 @@ class VAE(pl.LightningModule):
     def forward(self, x, y, e):
         if self.stage == 'train':
             # z_c,z_s ~ q(z_c,z_s|x,y,e)
-            posterior_dist = self.encoder(x, e)
+            posterior_dist = self.encoder(x, y, e)
             z = self.sample_z(posterior_dist)
             z_c, z_s = torch.chunk(z, 2, dim=1)
             # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
             log_prob_x_z = self.decoder(x, z).mean()
             # E_q(z_c|x,y,e)[log p(y|z_c)]
-            y_pred = self.causal_classifier(z_c)
+            y_pred = self.causal_classifier(z_c.detach())
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
             prior_dist = self.prior(y, e)
