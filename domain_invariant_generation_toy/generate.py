@@ -24,7 +24,7 @@ def main(args):
     vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
-    posterior_dist = vae.encoder(x_train, e_train)
+    posterior_dist = vae.encoder(x_train, y_train, e_train)
     z = posterior_dist.loc
     for example_idx in range(args.n_examples):
         x_seed, y_seed, z_seed = x_train[[example_idx]], y_train[[example_idx]], z[[example_idx]]
