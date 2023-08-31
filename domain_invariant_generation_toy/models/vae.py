@@ -4,7 +4,7 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril, arr_to_cov
+from utils.nn_utils import MLP
 from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
@@ -13,8 +13,8 @@ class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
         self.z_size = z_size
-        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size, nn.LeakyReLU)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size), nn.LeakyReLU)
+        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
 
     def forward(self, x, y, e):
         batch_size = len(x)
@@ -24,15 +24,15 @@ class Encoder(nn.Module):
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
         cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, size_to_n_tril(2 * self.z_size))
-        cov = arr_to_scale_tril(cov[torch.arange(batch_size), y_idx, e_idx, :])
-        return D.MultivariateNormal(mu, scale_tril=cov)
+        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
+        cov = F.softplus(cov[torch.arange(batch_size), y_idx, e_idx, :])
+        return D.MultivariateNormal(mu, torch.diag_embed(cov))
 
 
 class Decoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, h_sizes, x_size, nn.LeakyReLU)
+        self.mlp = MLP(2 * z_size, h_sizes, x_size)
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
@@ -98,7 +98,7 @@ class VAE(pl.LightningModule):
         self.decoder = Decoder(x_size, z_size, h_sizes)
         self.train_params += list(self.decoder.parameters())
         # p(y|z_c)
-        self.causal_classifier = MLP(z_size, h_sizes, 1, nn.LeakyReLU)
+        self.causal_classifier = MLP(z_size, h_sizes, 1)
         self.train_params += list(self.causal_classifier.parameters())
         # p(z_c,z_s|y,e)
         self.prior = Prior(z_size)
