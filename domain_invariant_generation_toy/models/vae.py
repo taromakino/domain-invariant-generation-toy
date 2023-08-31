@@ -199,14 +199,10 @@ class VAE(pl.LightningModule):
     def inference_loss(self, x, z, q_causal, q_spurious):
         log_prob_x_z = self.decoder(x, z).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
-        prob_y_pos_zc = torch.sigmoid(self.classifier(z_c))
-        prob_y_neg_zc = 1 - prob_y_pos_zc
-        prob_y_zc = torch.hstack((prob_y_neg_zc, prob_y_pos_zc))
-        log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
         log_prob_zc = q_causal.log_prob(z_c).mean()
         log_prob_zs = q_spurious.log_prob(z_s).mean()
         log_prob_z = log_prob_zc + log_prob_zs
-        return log_prob_x_z, log_prob_y_zc, log_prob_z
+        return log_prob_x_z, log_prob_z
 
     def inference(self, x):
         batch_size = len(x)
@@ -218,28 +214,26 @@ class VAE(pl.LightningModule):
         z_param = nn.Parameter(z_sample.to(self.device))
         optim = Adam([z_param], lr=self.lr_inference)
         optim_loss = torch.inf
-        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z = optim_z = None
+        optim_log_prob_x_z = optim_log_prob_z = optim_z = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            log_prob_x_z, log_prob_y_zc, log_prob_z = self.inference_loss(x, z_param, q_causal, q_spurious)
-            loss = -log_prob_x_z - log_prob_y_zc - self.q_mult * log_prob_z
+            log_prob_x_z, log_prob_z = self.inference_loss(x, z_param, q_causal, q_spurious)
+            loss = -log_prob_x_z - self.q_mult * log_prob_z
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
                 optim_log_prob_x_z = log_prob_x_z
-                optim_log_prob_y_zc = log_prob_y_zc
                 optim_log_prob_z = log_prob_z
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return self.classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
+        return self.classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_z, optim_loss
 
     def test_step(self, batch, batch_idx):
         with torch.set_grad_enabled(True):
             x, y = batch
-            y_pred, log_prob_x_z, log_prob_y_zc, log_prob_z, loss = self.inference(x)
+            y_pred, log_prob_x_z, log_prob_z, loss = self.inference(x)
             self.log('test_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-            self.log('test_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('test_log_prob_z', log_prob_z, on_step=False, on_epoch=True)
             self.log('test_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
