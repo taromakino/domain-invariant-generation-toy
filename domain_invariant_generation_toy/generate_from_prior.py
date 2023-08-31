@@ -26,7 +26,7 @@ def main(args):
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x_train[[example_idx]], y_train[[example_idx]], e_train[[example_idx]]
-        posterior_dist_seed = vae.encoder(x_seed, y_seed, e_seed)
+        posterior_dist_seed = vae.encoder(x_seed, e_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, args.n_cols, figsize=(2 * args.n_cols, 2 * 2))
