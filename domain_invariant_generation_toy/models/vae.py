@@ -69,19 +69,23 @@ class Prior(nn.Module):
 
 
 class AggregatedPosterior(nn.Module):
-    def __init__(self, z_size):
+    def __init__(self, z_size, n_components):
         super().__init__()
-        self.mu = nn.Parameter(torch.zeros(1, z_size))
-        self.cov = nn.Parameter(torch.zeros(1, z_size))
-        nn.init.kaiming_normal_(self.mu)
-        nn.init.kaiming_normal_(self.cov)
+        self.logits = nn.Parameter(torch.ones(n_components))
+        self.mu = nn.Parameter(torch.zeros(n_components, z_size))
+        self.cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(z_size)))
+        nn.init.xavier_normal_(self.mu)
+        nn.init.xavier_normal_(self.cov)
 
     def forward(self):
-        return D.MultivariateNormal(self.mu, torch.diag_embed(F.softplus(self.cov)))
+        mixture_dist = D.Categorical(logits=self.logits)
+        component_dist = D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(self.cov))
+        return D.MixtureSameFamily(mixture_dist, component_dist)
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, prior_reg_mult, q_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, weight_decay, lr,
+            lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
@@ -106,10 +110,10 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         # q(z_c)
-        self.q_causal = AggregatedPosterior(z_size)
+        self.q_causal = AggregatedPosterior(z_size, n_components)
         self.train_q_params += list(self.q_causal.parameters())
         # q(z_s)
-        self.q_spurious = AggregatedPosterior(z_size)
+        self.q_spurious = AggregatedPosterior(z_size, n_components)
         self.train_q_params += list(self.q_spurious.parameters())
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
