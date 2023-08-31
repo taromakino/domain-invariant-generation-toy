@@ -108,6 +108,7 @@ class VAE(pl.LightningModule):
         # q(z_s)
         self.q_spurious = AggregatedPosterior(z_size)
         self.train_q_params += list(self.q_spurious.parameters())
+        self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
 
@@ -134,7 +135,7 @@ class VAE(pl.LightningModule):
             # E_q(z_c|x,y,e)[log p(y|z_c)]
             y_pred = self.classifier(z_c)
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-            return log_prob_y_zc
+            return y_pred, log_prob_y_zc
         elif self.stage == 'train_q':
             z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
             log_prob_zc = self.q_causal().log_prob(z_c).mean()
@@ -157,7 +158,7 @@ class VAE(pl.LightningModule):
             loss = -log_prob_x_z  + kl + self.prior_reg_mult * prior_reg
             return loss
         elif self.stage == 'train_classifier':
-            log_prob_y_zc = self.forward(*batch)
+            y_pred, log_prob_y_zc = self.forward(*batch)
             loss = -log_prob_y_zc
             return loss
         elif self.stage == 'train_q':
@@ -174,13 +175,19 @@ class VAE(pl.LightningModule):
             self.log('val_prior_reg', prior_reg, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.stage == 'train_classifier':
-            log_prob_y_zc = self.forward(*batch)
+            x, y, e = batch
+            y_pred, log_prob_y_zc = self.forward(*batch)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
+            y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
+            self.val_acc.update(y_pred_class, y.long())
         elif self.stage == 'train_q':
             log_prob_z = self.forward(*batch)
             loss = -log_prob_z
             self.log('val_loss', loss, on_step=False, on_epoch=True)
+
+    def on_validation_epoch_end(self):
+        self.log('val_acc', self.val_acc.compute())
 
     def inference_loss(self, x, z, q_causal, q_spurious):
         log_prob_x_z = self.decoder(x, z).mean()
