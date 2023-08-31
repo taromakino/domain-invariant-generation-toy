@@ -25,7 +25,7 @@ def make_model(args, x_size):
 
 
 def make_trainer(args):
-    if args.stage == 'train' or args.stage == 'train_q':
+    if 'train' in args.stage:
         return pl.Trainer(
             logger=CSVLogger(args.dpath, name='', version=args.seed),
             callbacks=[
@@ -46,9 +46,7 @@ def main(args):
     x_train, _, _ = data_train.dataset[:]
     model = make_model(args, x_train.shape[1])
     trainer = make_trainer(args)
-    if args.stage == 'train':
-        trainer.fit(model, data_train, data_val, ckpt_path=args.ckpt_fpath)
-    elif args.stage == 'train_q':
+    if 'train' in args.stage:
         trainer.fit(model, data_train, data_val)
     elif args.stage == 'test':
         trainer.test(model, data_test)

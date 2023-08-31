@@ -12,7 +12,7 @@ from models.vae import VAE
 
 
 def log_prob_yzc(y, z_c, vae, q_causal):
-    y_pred = vae.causal_classifier(z_c)
+    y_pred = vae.classifier(z_c)
     log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
     log_prob_zc = q_causal.log_prob(z_c).mean()
     return log_prob_y_zc, log_prob_zc
