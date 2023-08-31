@@ -21,7 +21,7 @@ def make_model(args, x_size):
                 args.weight_decay, args.lr, args.lr_inference, args.n_steps)
         else:
             return VAE.load_from_checkpoint(args.ckpt_fpath, stage=args.stage, q_mult=args.q_mult,
-                lr_inference=args.lr_inference, n_steps=args.n_steps)
+                lr_inference=args.lr_inference, n_steps=args.n_steps, map_location='cpu')
 
 
 def make_trainer(args):
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('--q_mult', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--lr_inference', type=float, default=1e-3)
+    parser.add_argument('--lr_inference', type=float, default=0.01)
     parser.add_argument('--n_steps', type=int, default=5000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)

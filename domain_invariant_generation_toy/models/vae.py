@@ -108,7 +108,7 @@ class VAE(pl.LightningModule):
         # q(z_s)
         self.q_spurious = AggregatedPosterior(z_size)
         self.train_q_params += list(self.q_spurious.parameters())
-        self.acc = Accuracy('binary')
+        self.test_acc = Accuracy('binary')
         self.configure_grad()
 
     def sample_z(self, dist):
@@ -122,7 +122,6 @@ class VAE(pl.LightningModule):
         if self.stage == 'train_vae':
             # z_c,z_s ~ q(z_c,z_s|x,y,e)
             z = self.sample_z(posterior_dist)
-            z_c, z_s = torch.chunk(z, 2, dim=1)
             # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
             log_prob_x_z = self.decoder(x, z).mean()
             # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
@@ -199,8 +198,8 @@ class VAE(pl.LightningModule):
         batch_size = len(x)
         q_causal = self.q_causal()
         q_spurious = self.q_spurious()
-        zc_sample = q_causal.sample((batch_size,))
-        zs_sample = q_spurious.sample((batch_size,))
+        zc_sample = q_causal.sample((batch_size,)).squeeze()
+        zs_sample = q_spurious.sample((batch_size,)).squeeze()
         z_sample = torch.cat((zc_sample, zs_sample), dim=1)
         z_param = nn.Parameter(z_sample.to(self.device))
         optim = Adam([z_param], lr=self.lr_inference)
