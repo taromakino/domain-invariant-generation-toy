@@ -9,6 +9,9 @@ from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 
 
+GAUSSIAN_INIT_SD = 0.1
+
+
 class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
@@ -45,13 +48,13 @@ class Prior(nn.Module):
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
         self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(z_size)))
-        nn.init.xavier_normal_(self.mu_causal)
-        nn.init.xavier_normal_(self.cov_causal)
+        nn.init.normal_(self.mu_causal, 0, GAUSSIAN_INIT_SD)
+        nn.init.normal_(self.cov_causal, 0, GAUSSIAN_INIT_SD)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
         self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(z_size)))
-        nn.init.xavier_normal_(self.mu_spurious)
-        nn.init.xavier_normal_(self.cov_spurious)
+        nn.init.normal_(self.mu_spurious, 0, GAUSSIAN_INIT_SD)
+        nn.init.normal_(self.cov_spurious, 0, GAUSSIAN_INIT_SD)
 
     def forward(self, y, e):
         batch_size = len(y)
@@ -69,23 +72,19 @@ class Prior(nn.Module):
 
 
 class AggregatedPosterior(nn.Module):
-    def __init__(self, z_size, n_components):
+    def __init__(self, z_size):
         super().__init__()
-        self.logits = nn.Parameter(torch.ones(n_components))
-        self.mu = nn.Parameter(torch.zeros(n_components, z_size))
-        self.cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(z_size)))
-        nn.init.xavier_normal_(self.mu)
-        nn.init.xavier_normal_(self.cov)
+        self.mu = nn.Parameter(torch.zeros(z_size))
+        self.cov = nn.Parameter(torch.zeros(size_to_n_tril(z_size)))
+        nn.init.normal_(self.mu, 0, GAUSSIAN_INIT_SD)
+        nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
 
     def forward(self):
-        mixture_dist = D.Categorical(logits=self.logits)
-        component_dist = D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(self.cov))
-        return D.MixtureSameFamily(mixture_dist, component_dist)
+        return D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(F.softplus(self.cov)))
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, stage, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, weight_decay, lr,
-            lr_inference, n_steps):
+    def __init__(self, stage, x_size, z_size, h_sizes, prior_reg_mult, q_mult, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.stage = stage
@@ -110,10 +109,10 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         # q(z_c)
-        self.q_causal = AggregatedPosterior(z_size, n_components)
+        self.q_causal = AggregatedPosterior(z_size)
         self.train_q_params += list(self.q_causal.parameters())
         # q(z_s)
-        self.q_spurious = AggregatedPosterior(z_size, n_components)
+        self.q_spurious = AggregatedPosterior(z_size)
         self.train_q_params += list(self.q_spurious.parameters())
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
@@ -208,8 +207,8 @@ class VAE(pl.LightningModule):
         batch_size = len(x)
         q_causal = self.q_causal()
         q_spurious = self.q_spurious()
-        zc_sample = q_causal.sample((batch_size,)).squeeze()
-        zs_sample = q_spurious.sample((batch_size,)).squeeze()
+        zc_sample = q_causal.sample((batch_size,))
+        zs_sample = q_spurious.sample((batch_size,))
         z_sample = torch.cat((zc_sample, zs_sample), dim=1)
         z_param = nn.Parameter(z_sample.to(self.device))
         optim = Adam([z_param], lr=self.lr_inference)
