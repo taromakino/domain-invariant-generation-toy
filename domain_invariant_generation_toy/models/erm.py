@@ -1,6 +1,5 @@
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 from torchmetrics import Accuracy
@@ -12,7 +11,7 @@ class ERM(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = MLP(x_size, h_sizes, 1, nn.ReLU)
+        self.model = MLP(x_size, h_sizes, 1)
         self.acc = Accuracy('binary')
 
     def forward(self, x, y, e):

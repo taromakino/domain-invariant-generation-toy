@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from data import MAKE_DATA, PLOT, IMAGE_SHAPE
 from torch.optim import Adam
 from utils.file import load_file
-from models.vae import VAE
+from models.model import Model
 
 
 def log_prob_yzc(y, z_c, vae, q_causal):
@@ -22,8 +22,8 @@ def main(args):
     existing_args = load_file(os.path.join(args.dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
-    vae = VAE.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
-        stage='test')
+    vae = Model.load_from_checkpoint(os.path.join(args.dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'),
+                                     stage='test')
     q_causal = vae.q_causal()
     x_train, y_train, e_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(vae.device), y_train.to(vae.device), e_train.to(vae.device)

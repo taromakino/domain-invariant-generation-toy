@@ -12,6 +12,7 @@ N_TEST = 2000
 WIDTH_LB = 8
 WIDTH_UB = 32
 IMAGE_SIZE = 64
+X_SIZE = IMAGE_SIZE ** 2
 
 
 def make_trainval_data():

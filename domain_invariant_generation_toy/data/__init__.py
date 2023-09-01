@@ -2,6 +2,7 @@ import data.colored_mnist
 import data.dsprites
 from utils.plot import plot_grayscale_image, plot_red_green_image
 
+
 N_CLASSES = 2
 N_ENVS = 2
 
@@ -21,4 +22,9 @@ PLOT = {
 IMAGE_SHAPE = {
     'colored_mnist': (2, 28, 28),
     'dsprites': (data.dsprites.IMAGE_SIZE, data.dsprites.IMAGE_SIZE)
+}
+
+X_SIZE = {
+    'colored_mnist': data.colored_mnist.X_SIZE,
+    'dsprites': data.dsprites.X_SIZE
 }
