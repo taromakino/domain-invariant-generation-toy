@@ -80,7 +80,7 @@ class AggregatedPosterior(nn.Module):
         nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
 
     def forward(self):
-        return D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(F.softplus(self.cov)))
+        return D.MultivariateNormal(self.mu, scale_tril=torch.diag_embed(F.softplus(self.cov)))
 
 
 class VAE(pl.LightningModule):
