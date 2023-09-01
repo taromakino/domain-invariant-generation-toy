@@ -74,13 +74,13 @@ class Prior(nn.Module):
 class AggregatedPosterior(nn.Module):
     def __init__(self, z_size):
         super().__init__()
-        self.mu = nn.Parameter(torch.zeros(z_size))
-        self.cov = nn.Parameter(torch.zeros(size_to_n_tril(z_size)))
+        self.mu = nn.Parameter(torch.zeros(1, z_size))
+        self.cov = nn.Parameter(torch.zeros(1, size_to_n_tril(z_size)))
         nn.init.normal_(self.mu, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
 
     def forward(self):
-        return D.MultivariateNormal(self.mu, scale_tril=torch.diag_embed(F.softplus(self.cov)))
+        return D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(self.cov))
 
 
 class VAE(pl.LightningModule):
@@ -207,8 +207,8 @@ class VAE(pl.LightningModule):
         batch_size = len(x)
         q_causal = self.q_causal()
         q_spurious = self.q_spurious()
-        zc_sample = q_causal.sample((batch_size,))
-        zs_sample = q_spurious.sample((batch_size,))
+        zc_sample = q_causal.sample((batch_size,)).squeeze()
+        zs_sample = q_spurious.sample((batch_size,)).squeeze()
         z_sample = torch.cat((zc_sample, zs_sample), dim=1)
         z_param = nn.Parameter(z_sample.to(self.device))
         optim = Adam([z_param], lr=self.lr_inference)
