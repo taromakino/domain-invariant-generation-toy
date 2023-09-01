@@ -237,7 +237,10 @@ class Model(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         if self.task in [Task.INFER_Z_TRAIN, Task.INFER_Z_VAL, Task.INFER_Z_TEST]:
             with torch.set_grad_enabled(True):
-                x, y = batch
+                if self.task is Task.INFER_Z_TEST:
+                    x, y = batch
+                else:
+                    x, y, e = batch
                 z, log_prob_x_z, log_prob_z, loss = self.infer_z(x)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
                 self.log('log_prob_z', log_prob_z, on_step=False, on_epoch=True)
