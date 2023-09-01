@@ -47,28 +47,25 @@ class Prior(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(z_size)))
+        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
         nn.init.normal_(self.mu_causal, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_causal, 0, GAUSSIAN_INIT_SD)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(z_size)))
+        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
         nn.init.normal_(self.mu_spurious, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_spurious, 0, GAUSSIAN_INIT_SD)
 
     def forward(self, y, e):
-        batch_size = len(y)
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         mu_causal = self.mu_causal[e_idx]
         mu_spurious = self.mu_spurious[y_idx, e_idx]
         mu = torch.hstack((mu_causal, mu_spurious))
-        cov_causal = arr_to_cov(self.cov_causal[e_idx])
-        cov_spurious = arr_to_cov(self.cov_spurious[y_idx, e_idx])
-        cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=y.device)
-        cov[:, :self.z_size, :self.z_size] = cov_causal
-        cov[:, self.z_size:, self.z_size:] = cov_spurious
-        return D.MultivariateNormal(mu, cov)
+        cov_causal = F.softplus(self.cov_causal[e_idx])
+        cov_spurious = F.softplus(self.cov_spurious[y_idx, e_idx])
+        cov = torch.hstack((cov_causal, cov_spurious))
+        return D.MultivariateNormal(mu, torch.diag_embed(cov))
 
 
 class AggregatedPosterior(nn.Module):
