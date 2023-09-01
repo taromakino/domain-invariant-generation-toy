@@ -251,7 +251,7 @@ class Model(pl.LightningModule):
             z, y = batch
             y_pred, log_prob_y_zc = self.classify(*batch)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
-            self.val_acc.update(y_pred_class, y.long())
+            self.test_acc.update(y_pred_class, y.long())
 
     def on_test_epoch_end(self):
         if self.task in [Task.INFER_Z_TRAIN, Task.INFER_Z_VAL, Task.INFER_Z_TEST]:
