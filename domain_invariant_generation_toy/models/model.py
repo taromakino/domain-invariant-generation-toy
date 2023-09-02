@@ -121,7 +121,6 @@ class Model(pl.LightningModule):
         self.q_params += list(self.q_spurious.parameters())
         self.z = []
         self.y = []
-        self.x = []
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -248,7 +247,6 @@ class Model(pl.LightningModule):
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.z.append(z.detach().cpu())
                 self.y.append(y.cpu())
-                self.x.append(x.cpu())
         elif self.task == Task.CLASSIFY:
             z, y = batch
             y_pred, log_prob_y_zc = self.classify(*batch)
@@ -257,8 +255,8 @@ class Model(pl.LightningModule):
 
     def on_test_epoch_end(self):
         if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
-            z, y, x = torch.cat(self.z), torch.cat(self.y), torch.cat(self.x)
-            torch.save((z, y, x), os.path.join(self.dpath, f'version_{self.seed}', 'zy.pt'))
+            z, y = torch.cat(self.z), torch.cat(self.y)
+            torch.save((z, y), os.path.join(self.dpath, f'version_{self.seed}', 'zy.pt'))
         elif self.task == Task.CLASSIFY:
             self.log('test_acc', self.test_acc.compute())
 

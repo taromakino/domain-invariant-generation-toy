@@ -48,7 +48,7 @@ def main(args):
             x_pred_spurious = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_seed, zs_sample))))
             plot(axes[0, col_idx], x_pred_causal.reshape(image_size).detach().cpu().numpy())
             plot(axes[1, col_idx], x_pred_spurious.reshape(image_size).detach().cpu().numpy())
-        fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'generate_from_prior')
+        fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'generate_sample_prior')
         os.makedirs(fig_dpath, exist_ok=True)
         plt.savefig(os.path.join(fig_dpath, f'{example_idx}.png'))
 
