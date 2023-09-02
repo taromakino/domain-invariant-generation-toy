@@ -12,17 +12,17 @@ from utils.file import save_file
 from utils.nn_utils import make_dataloader
 
 
-def make_trainer(task_dpath, is_train):
+def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
     if is_train:
         return pl.Trainer(
-            logger=CSVLogger(task_dpath, name='', version=args.seed),
+            logger=CSVLogger(task_dpath, name='', version=seed),
             callbacks=[
-                EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
+                EarlyStopping(monitor='val_loss', patience=int(early_stop_ratio * n_epochs)),
                 ModelCheckpoint(monitor='val_loss', filename='best')],
-            max_epochs=args.n_epochs)
+            max_epochs=n_epochs)
     else:
         return pl.Trainer(
-            logger=CSVLogger(task_dpath, name='', version=args.seed),
+            logger=CSVLogger(task_dpath, name='', version=seed),
             max_epochs=1,
             inference_mode=False)
 
@@ -32,31 +32,29 @@ def main(args):
     task_dpath = os.path.join(args.dpath, args.task.value)
     save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
-    if args.task is Task.ERM:
+    if args.task == Task.ERM:
         model = ERM(X_SIZE[args.dataset], args.h_sizes, args.lr)
-        trainer = make_trainer(task_dpath, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
-    if args.task is Task.TRAIN_VAE:
+    if args.task == Task.TRAIN_VAE:
         model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.n_components,
             args.prior_reg_mult, args.q_mult, args.weight_decay, args.lr, args.lr_inference, args.n_steps)
-        trainer = make_trainer(task_dpath, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
-    elif args.task is Task.TRAIN_Q:
+    elif args.task == Task.TRAIN_Q:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, lr=args.lr)
-        trainer = make_trainer(task_dpath, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
-    elif args.task in [
-        Task.INFER_Z_TRAIN, Task.INFER_Z_VAL, Task.INFER_Z_TEST
-    ]:
+    elif args.task == Task.INFER_Z_TRAIN or args.task == Task.INFER_Z_VAL or args.task == Task.INFER_Z_TEST:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_Q.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, q_mult=args.q_mult,
             lr_inference=args.lr_inference, n_steps=args.n_steps)
-        trainer = make_trainer(task_dpath, False)
-        if args.task is Task.INFER_Z_TRAIN:
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
+        if args.task == Task.INFER_Z_TRAIN:
             trainer.test(model, data_train)
-        elif args.task is Task.INFER_Z_VAL:
+        elif args.task == Task.INFER_Z_VAL:
             trainer.test(model, data_val)
         else:
             trainer.test(model, data_test)
@@ -69,7 +67,7 @@ def main(args):
         zy_test = make_dataloader((z_test, y_test), args.batch_size, True)
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_Q.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, q_mult=args.q_mult)
-        trainer = make_trainer(task_dpath, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, zy_train, zy_val)
         trainer.test(model, zy_test, ckpt_path='best')
 

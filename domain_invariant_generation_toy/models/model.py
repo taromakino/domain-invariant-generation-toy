@@ -131,6 +131,13 @@ class Model(pl.LightningModule):
         epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
+    def prior_reg(self, prior_dist):
+        batch_size = len(prior_dist.loc)
+        mu = torch.zeros_like(prior_dist.loc).to(self.device)
+        cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
+        standard_normal = D.MultivariateNormal(mu, cov)
+        return D.kl_divergence(prior_dist, standard_normal)
+
     def train_vae(self, x, y, e):
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
         posterior_dist = self.encoder(x, y, e)
@@ -157,6 +164,14 @@ class Model(pl.LightningModule):
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
+    def log_prob_xz(self, x, z, q_causal, q_spurious):
+        log_prob_x_z = self.decoder(x, z).mean()
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        log_prob_zc = q_causal.log_prob(z_c).mean()
+        log_prob_zs = q_spurious.log_prob(z_s).mean()
+        log_prob_z = log_prob_zc + log_prob_zs
+        return log_prob_x_z, log_prob_z
+
     def infer_z(self, x):
         batch_size = len(x)
         q_causal = self.q_causal()
@@ -181,48 +196,33 @@ class Model(pl.LightningModule):
                 optim_z = z_param.clone()
         return optim_z, optim_log_prob_x_z, optim_log_prob_z, optim_loss
 
-    def prior_reg(self, prior_dist):
-        batch_size = len(prior_dist.loc)
-        mu = torch.zeros_like(prior_dist.loc).to(self.device)
-        cov = torch.eye(2 * self.z_size).expand(batch_size, 2 * self.z_size, 2 * self.z_size).to(self.device)
-        standard_normal = D.MultivariateNormal(mu, cov)
-        return D.kl_divergence(prior_dist, standard_normal)
-
-    def log_prob_xz(self, x, z, q_causal, q_spurious):
-        log_prob_x_z = self.decoder(x, z).mean()
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        log_prob_zc = q_causal.log_prob(z_c).mean()
-        log_prob_zs = q_spurious.log_prob(z_s).mean()
-        log_prob_z = log_prob_zc + log_prob_zs
-        return log_prob_x_z, log_prob_z
-
     def training_step(self, batch, batch_idx):
-        if self.task is Task.TRAIN_VAE:
+        if self.task == Task.TRAIN_VAE:
             log_prob_x_z, kl, prior_reg = self.train_vae(*batch)
             loss = -log_prob_x_z  + kl + self.prior_reg_mult * prior_reg
             return loss
-        elif self.task is Task.TRAIN_Q:
+        elif self.task == Task.TRAIN_Q:
             log_prob_z = self.train_q(*batch)
             loss = -log_prob_z
             return loss
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             y_pred, log_prob_y_zc = self.classify(*batch)
             loss = -log_prob_y_zc
             return loss
 
     def validation_step(self, batch, batch_idx):
-        if self.task is Task.TRAIN_VAE:
+        if self.task == Task.TRAIN_VAE:
             log_prob_x_z, kl, prior_reg = self.train_vae(*batch)
             loss = -log_prob_x_z + kl + self.prior_reg_mult * prior_reg
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_prior_reg', prior_reg, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task is Task.TRAIN_Q:
+        elif self.task == Task.TRAIN_Q:
             log_prob_z = self.train_q(*batch)
             loss = -log_prob_z
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             z, y = batch
             y_pred, log_prob_y_zc = self.classify(*batch)
             loss = -log_prob_y_zc
@@ -231,13 +231,13 @@ class Model(pl.LightningModule):
             self.val_acc.update(y_pred_class, y.long())
 
     def on_validation_epoch_end(self):
-        if self.task is Task.CLASSIFY:
+        if self.task == Task.CLASSIFY:
             self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
-        if self.task in [Task.INFER_Z_TRAIN, Task.INFER_Z_VAL, Task.INFER_Z_TEST]:
+        if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
             with torch.set_grad_enabled(True):
-                if self.task is Task.INFER_Z_TEST:
+                if self.task == Task.INFER_Z_TEST:
                     x, y = batch
                 else:
                     x, y, e = batch
@@ -247,35 +247,35 @@ class Model(pl.LightningModule):
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.z.append(z.detach().cpu())
                 self.y.append(y.cpu())
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             z, y = batch
             y_pred, log_prob_y_zc = self.classify(*batch)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.test_acc.update(y_pred_class, y.long())
 
     def on_test_epoch_end(self):
-        if self.task in [Task.INFER_Z_TRAIN, Task.INFER_Z_VAL, Task.INFER_Z_TEST]:
+        if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
             z, y = torch.cat(self.z), torch.cat(self.y)
             torch.save((z, y), os.path.join(self.dpath, f'version_{self.seed}', 'zy.pt'))
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
-        if self.task is Task.TRAIN_VAE:
+        if self.task == Task.TRAIN_VAE:
             for params in self.vae_params:
                 params.requires_grad = True
             for params in self.q_params:
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        elif self.task is Task.TRAIN_Q:
+        elif self.task == Task.TRAIN_Q:
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.q_params:
                 params.requires_grad = True
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.q_params:
@@ -285,15 +285,15 @@ class Model(pl.LightningModule):
         else:
             for params in self.vae_params:
                 params.requires_grad = False
-            for params in self.classifier.parameters():
-                params.requires_grad = False
             for params in self.q_params:
+                params.requires_grad = False
+            for params in self.classifier.parameters():
                 params.requires_grad = False
 
     def configure_optimizers(self):
-        if self.task is Task.TRAIN_VAE:
+        if self.task == Task.TRAIN_VAE:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task is Task.TRAIN_Q:
+        elif self.task == Task.TRAIN_Q:
             return Adam(self.q_params, lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task is Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY:
             return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)
