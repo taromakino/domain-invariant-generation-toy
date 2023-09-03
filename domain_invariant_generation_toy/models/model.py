@@ -18,8 +18,8 @@ class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
         self.z_size = z_size
-        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size))
+        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size, False)
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size), False)
 
     def forward(self, x, y, e):
         batch_size = len(x)
@@ -37,7 +37,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, h_sizes, x_size)
+        self.mlp = MLP(2 * z_size, h_sizes, x_size, False)
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
@@ -112,7 +112,7 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
-        self.classifier = MLP(z_size, h_sizes, 1)
+        self.classifier = MLP(z_size, h_sizes, 1, True)
         # q(z_c)
         self.q_causal = AggregatedPosterior(z_size, n_components)
         self.q_params += list(self.q_causal.parameters())

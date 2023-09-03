@@ -11,7 +11,7 @@ class ERM(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = MLP(x_size, h_sizes, 1)
+        self.model = MLP(x_size, h_sizes, 1, True)
         self.acc = Accuracy('binary')
 
     def forward(self, x, y, e):
