@@ -70,24 +70,19 @@ class Prior(nn.Module):
         return D.MultivariateNormal(mu, torch.diag_embed(cov))
 
 
-class AggregatedPosterior(nn.Module):
-    def __init__(self, z_size, n_components):
+class InferenceEncoder(nn.Module):
+    def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.logits = nn.Parameter(torch.ones(n_components))
-        self.mu = nn.Parameter(torch.zeros(n_components, z_size))
-        self.cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(z_size)))
-        nn.init.normal_(self.mu, 0, GAUSSIAN_INIT_SD)
-        nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
+        self.mu = MLP(x_size, h_sizes, z_size, False)
+        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size), False)
 
-    def forward(self):
-        mixture_dist = D.Categorical(logits=self.logits)
-        component_dist = D.MultivariateNormal(self.mu, scale_tril=arr_to_scale_tril(self.cov))
-        return D.MixtureSameFamily(mixture_dist, component_dist)
+    def forward(self, x):
+        return D.MultivariateNormal(self.mu(x), arr_to_scale_tril(self.cov(x)))
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, n_components, prior_reg_mult, q_mult, weight_decay,
-            lr, lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, prior_reg_mult, q_mult, weight_decay, lr,
+            lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
@@ -111,14 +106,10 @@ class Model(pl.LightningModule):
         # p(z_c,z_s|y,e)
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
+        # q(z|x)
+        self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes)
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1, True)
-        # q(z_c)
-        self.q_causal = AggregatedPosterior(z_size, n_components)
-        self.q_params += list(self.q_causal.parameters())
-        # q(z_s)
-        self.q_spurious = AggregatedPosterior(z_size, n_components)
-        self.q_params += list(self.q_spurious.parameters())
         self.z = []
         self.y = []
         self.val_acc = Accuracy('binary')
@@ -150,60 +141,28 @@ class Model(pl.LightningModule):
         prior_reg = self.prior_reg(prior_dist).mean()
         return log_prob_x_z, kl, prior_reg
 
-    def train_q(self, x, y, e):
+    def train_inference_encoder(self, x, y, e):
         posterior_dist = self.encoder(x, y, e)
-        z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
-        log_prob_zc = self.q_causal().log_prob(z_c).mean()
-        log_prob_zs = self.q_spurious().log_prob(z_s).mean()
-        log_prob_z = log_prob_zc + log_prob_zs
-        return log_prob_z
+        inference_posterior_dist = self.inference_encoder(x)
+        kl = D.kl_divergence(inference_posterior_dist, posterior_dist)
+        return kl
 
-    def classify(self, z, y):
+    def classify(self, x, y):
+        inference_posterior_dist = self.inference_encoder(x)
+        z = inference_posterior_dist.loc
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
-
-    def log_prob_xz(self, x, z, q_causal, q_spurious):
-        log_prob_x_z = self.decoder(x, z).mean()
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        log_prob_zc = q_causal.log_prob(z_c).mean()
-        log_prob_zs = q_spurious.log_prob(z_s).mean()
-        log_prob_z = log_prob_zc + log_prob_zs
-        return log_prob_x_z, log_prob_z
-
-    def infer_z(self, x):
-        batch_size = len(x)
-        q_causal = self.q_causal()
-        q_spurious = self.q_spurious()
-        zc_sample = q_causal.sample((batch_size,))
-        zs_sample = q_spurious.sample((batch_size,))
-        z_sample = torch.cat((zc_sample, zs_sample), dim=1)
-        z_param = nn.Parameter(z_sample.to(self.device))
-        optim = Adam([z_param], lr=self.lr_inference)
-        optim_loss = torch.inf
-        optim_log_prob_x_z = optim_log_prob_z = optim_z = None
-        for _ in range(self.n_steps):
-            optim.zero_grad()
-            log_prob_x_z, log_prob_z = self.log_prob_xz(x, z_param, q_causal, q_spurious)
-            loss = -log_prob_x_z - self.q_mult * log_prob_z
-            loss.backward()
-            optim.step()
-            if loss < optim_loss:
-                optim_loss = loss
-                optim_log_prob_x_z = log_prob_x_z
-                optim_log_prob_z = log_prob_z
-                optim_z = z_param.clone()
-        return optim_z, optim_log_prob_x_z, optim_log_prob_z, optim_loss
 
     def training_step(self, batch, batch_idx):
         if self.task == Task.TRAIN_VAE:
             log_prob_x_z, kl, prior_reg = self.train_vae(*batch)
             loss = -log_prob_x_z  + kl + self.prior_reg_mult * prior_reg
             return loss
-        elif self.task == Task.TRAIN_Q:
-            log_prob_z = self.train_q(*batch)
-            loss = -log_prob_z
+        elif self.task == Task.TRAIN_INFERENCE_ENCODER:
+            kl = self.train_inference_encoder(*batch)
+            loss = kl
             return loss
         elif self.task == Task.CLASSIFY:
             y_pred, log_prob_y_zc = self.classify(*batch)
@@ -218,13 +177,13 @@ class Model(pl.LightningModule):
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_prior_reg', prior_reg, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task == Task.TRAIN_Q:
-            log_prob_z = self.train_q(*batch)
-            loss = -log_prob_z
+        elif self.task == Task.TRAIN_INFERENCE_ENCODER:
+            kl = self.train_inference_encoder(*batch)
+            loss = kl
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.CLASSIFY:
-            z, y = batch
-            y_pred, log_prob_y_zc = self.classify(*batch)
+            x, y, e = batch
+            y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
@@ -235,65 +194,43 @@ class Model(pl.LightningModule):
             self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
-        if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
-            with torch.set_grad_enabled(True):
-                if self.task == Task.INFER_Z_TEST:
-                    x, y = batch
-                else:
-                    x, y, e = batch
-                z, log_prob_x_z, log_prob_z, loss = self.infer_z(x)
-                self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-                self.log('log_prob_z', log_prob_z, on_step=False, on_epoch=True)
-                self.log('loss', loss, on_step=False, on_epoch=True)
-                self.z.append(z.detach().cpu())
-                self.y.append(y.cpu())
-        elif self.task == Task.CLASSIFY:
-            z, y = batch
-            y_pred, log_prob_y_zc = self.classify(*batch)
+        if self.task == Task.CLASSIFY:
+            x, y = batch
+            y_pred, log_prob_y_zc = self.classify(x, y)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.test_acc.update(y_pred_class, y.long())
 
     def on_test_epoch_end(self):
-        if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
-            z, y = torch.cat(self.z), torch.cat(self.y)
-            torch.save((z, y), os.path.join(self.dpath, f'version_{self.seed}', 'zy.pt'))
-        elif self.task == Task.CLASSIFY:
+        if self.task == Task.CLASSIFY:
             self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
         if self.task == Task.TRAIN_VAE:
             for params in self.vae_params:
                 params.requires_grad = True
-            for params in self.q_params:
+            for params in self.inference_encoder.parameters():
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        elif self.task == Task.TRAIN_Q:
+        elif self.task == Task.TRAIN_INFERENCE_ENCODER:
             for params in self.vae_params:
                 params.requires_grad = False
-            for params in self.q_params:
+            for params in self.inference_encoder.parameters():
                 params.requires_grad = True
             for params in self.classifier.parameters():
                 params.requires_grad = False
         elif self.task == Task.CLASSIFY:
             for params in self.vae_params:
                 params.requires_grad = False
-            for params in self.q_params:
+            for params in self.inference_encoder.parameters():
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = True
-        else:
-            for params in self.vae_params:
-                params.requires_grad = False
-            for params in self.q_params:
-                params.requires_grad = False
-            for params in self.classifier.parameters():
-                params.requires_grad = False
 
     def configure_optimizers(self):
         if self.task == Task.TRAIN_VAE:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task == Task.TRAIN_Q:
-            return Adam(self.q_params, lr=self.lr, weight_decay=self.weight_decay)
+        elif self.task == Task.TRAIN_INFERENCE_ENCODER:
+            return Adam(self.inference_encoder.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         elif self.task == Task.CLASSIFY:
             return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)
