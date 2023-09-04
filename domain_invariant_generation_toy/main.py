@@ -48,7 +48,7 @@ def main(args):
     else:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_INFERENCE_ENCODER.value, f'version_{args.seed}',
             'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, q_mult=args.q_mult)
+        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, map_location='cpu')
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')

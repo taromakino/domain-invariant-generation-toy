@@ -152,7 +152,7 @@ class Model(pl.LightningModule):
         kl = D.kl_divergence(posterior_dist, inference_posterior_dist).mean()
         return kl
 
-    def predict_y_zc(self, x, y):
+    def classify_y_zc(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
         z = inference_posterior_dist.loc
         z_c, z_s = torch.chunk(z, 2, dim=1)
@@ -160,7 +160,7 @@ class Model(pl.LightningModule):
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
-    def predict_c_zc(self, x, c):
+    def classify_c_zc(self, x, c):
         inference_posterior_dist = self.inference_encoder(x)
         z = inference_posterior_dist.loc
         z_c, z_s = torch.chunk(z, 2, dim=1)
@@ -168,7 +168,7 @@ class Model(pl.LightningModule):
         log_prob_c_zc = -F.binary_cross_entropy_with_logits(c_pred, c)
         return c_pred, log_prob_c_zc
 
-    def predict_s_zc(self, x, s):
+    def regress_s_zc(self, x, s):
         inference_posterior_dist = self.inference_encoder(x)
         z = inference_posterior_dist.loc
         z_c, z_s = torch.chunk(z, 2, dim=1)
@@ -187,15 +187,15 @@ class Model(pl.LightningModule):
             loss = kl
             return loss
         elif self.task == Task.CLASSIFY_Y_ZC:
-            y_pred, log_prob_y_zc = self.predict_y_zc(x, y)
+            y_pred, log_prob_y_zc = self.classify_y_zc(x, y)
             loss = -log_prob_y_zc
             return loss
         elif self.task == Task.CLASSIFY_C_ZC:
-            c_pred, log_prob_c_zc = self.predict_y_zc(x, c)
+            c_pred, log_prob_c_zc = self.classify_c_zc(x, c)
             loss = -log_prob_c_zc
             return loss
         elif self.task == Task.REGRESS_S_ZC:
-            s_pred, mse_s_zc = self.regressor_s_zc(x, s)
+            s_pred, mse_s_zc = self.regress_s_zc(x, s)
             loss = mse_s_zc
             return loss
 
@@ -213,19 +213,19 @@ class Model(pl.LightningModule):
             loss = kl
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.CLASSIFY_Y_ZC:
-            y_pred, log_prob_y_zc = self.predict_y_zc(x, y)
+            y_pred, log_prob_y_zc = self.classify_y_zc(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.val_acc.update(y_pred_class, y.long())
         elif self.task == Task.CLASSIFY_C_ZC:
-            c_pred, log_prob_c_zc = self.predict_y_zc(x, c)
+            c_pred, log_prob_c_zc = self.classify_y_zc(x, c)
             loss = -log_prob_c_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             c_pred_class = (torch.sigmoid(c_pred) > 0.5).long()
             self.val_acc.update(c_pred_class, c.long())
         elif self.task == Task.REGRESS_S_ZC:
-            s_pred, mse_s_zc = self.regressor_s_zc(x, s)
+            s_pred, mse_s_zc = self.regress_s_zc(x, s)
             loss = mse_s_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             self.val_rsq.update(s_pred, s)
@@ -239,15 +239,15 @@ class Model(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
         if self.task == Task.CLASSIFY_Y_ZC:
-            y_pred, log_prob_y_zc = self.predict_y_zc(x, y)
+            y_pred, log_prob_y_zc = self.classify_y_zc(x, y)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.test_acc.update(y_pred_class, y.long())
         elif self.task == Task.CLASSIFY_C_ZC:
-            c_pred, log_prob_c_zc = self.predict_y_zc(x, c)
+            c_pred, log_prob_c_zc = self.classify_y_zc(x, c)
             c_pred_class = (torch.sigmoid(c_pred) > 0.5).long()
             self.test_acc.update(c_pred_class, c.long())
         elif self.task == Task.REGRESS_S_ZC:
-            s_pred, mse_s_zc = self.regressor_s_zc(x, s)
+            s_pred, mse_s_zc = self.regress_s_zc(x, s)
             self.test_rsq.update(s_pred, s)
 
     def on_test_epoch_end(self):

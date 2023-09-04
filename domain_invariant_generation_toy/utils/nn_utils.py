@@ -37,4 +37,4 @@ def arr_to_cholesky(arr):
     cov = torch.bmm(cov, torch.transpose(cov, 1, 2))
     diag_idxs = torch.arange(size)
     cov[:, diag_idxs, diag_idxs] += POS_DEF_EPS
-    return torch.cholesky(cov)
+    return torch.linalg.cholesky(cov)
