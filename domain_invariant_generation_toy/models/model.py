@@ -17,8 +17,8 @@ class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
         self.z_size = z_size
-        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size, False)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size), False)
+        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size))
 
     def forward(self, x, y, e):
         batch_size = len(x)
@@ -36,7 +36,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, h_sizes, x_size, False)
+        self.mlp = MLP(2 * z_size, h_sizes, x_size)
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
@@ -72,8 +72,8 @@ class Prior(nn.Module):
 class InferenceEncoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mu = MLP(x_size, h_sizes, z_size, False)
-        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size), False)
+        self.mu = MLP(x_size, h_sizes, z_size)
+        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
 
     def forward(self, x):
         return D.MultivariateNormal(self.mu(x), arr_to_scale_tril(self.cov(x)))
@@ -108,7 +108,7 @@ class Model(pl.LightningModule):
         # q(z|x)
         self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes)
         # p(y|z_c)
-        self.classifier = MLP(z_size, h_sizes, 1, True)
+        self.classifier = MLP(z_size, h_sizes, 1)
         self.z = []
         self.y = []
         self.val_acc = Accuracy('binary')
