@@ -27,13 +27,28 @@ def make_dataloader(data_tuple, batch_size, is_train):
     return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
+def size_to_n_tril(size):
+    '''
+    Return the number of nonzero entries in a square lower triangular matrix with size rows/columns
+    '''
+    return int(size * (size + 1) / 2)
+
+
+def n_tril_to_size(n_tril):
+    '''
+    Return the number of rows/columns in a square lower triangular matrix with n_tril nonzero entries
+    '''
+    return int((-1 + math.sqrt(1 + 8 * n_tril)) / 2)
+
+
 def arr_to_cholesky(arr):
     '''
     Assumes arr has nonnegative entries, e.g. is the output of a ReLU network
     '''
-    batch_size, size_sq = arr.shape
-    size = int(math.sqrt(size_sq))
+    batch_size, n_tri = arr.shape
+    size = n_tril_to_size(n_tri)
     cov = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
+    cov[:, *torch.tril_indices(size, size)] = arr
     cov = torch.bmm(cov, torch.transpose(cov, 1, 2))
     diag_idxs = torch.arange(size)
     cov[:, diag_idxs, diag_idxs] += POS_DEF_EPS
