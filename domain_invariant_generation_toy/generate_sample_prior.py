@@ -24,7 +24,7 @@ def main(args):
     pl.seed_everything(existing_args.seed)
     data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    x_train, y_train, e_train = data_train.dataset[:]
+    x_train, y_train, e_train, c_train, s_train = data_train.dataset[:]
     x_train, y_train, e_train = x_train.to(model.device), y_train.to(model.device), e_train.to(model.device)
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x_train[[example_idx]], y_train[[example_idx]], e_train[[example_idx]]

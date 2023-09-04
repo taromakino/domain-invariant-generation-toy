@@ -8,6 +8,9 @@ python $CODE_DPATH/main.py \
 --dpath $DPATH \
 --task train_vae
 
+python $CODE_DPATH/generate_sample_prior.py \
+--dpath $DPATH
+
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
@@ -16,4 +19,14 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task classify
+--task classify_y_zc
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task classify_c_zc
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task regress_s_zc
