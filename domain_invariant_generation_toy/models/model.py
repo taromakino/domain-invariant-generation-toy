@@ -164,7 +164,8 @@ class Model(pl.LightningModule):
             loss = kl
             return loss
         elif self.task == Task.CLASSIFY:
-            y_pred, log_prob_y_zc = self.classify(*batch)
+            x, y, _ = batch
+            y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             return loss
 
@@ -181,7 +182,7 @@ class Model(pl.LightningModule):
             loss = kl
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.CLASSIFY:
-            x, y, e = batch
+            x, y, _ = batch
             y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
