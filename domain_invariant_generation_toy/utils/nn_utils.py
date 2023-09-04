@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 
-POS_DEF_EPS = 1e-6
+POS_DEF_EPS = 1e-3
 
 
 class MLP(nn.Module):
