@@ -54,8 +54,11 @@ def make_trainval_data():
     images[:, 1, :, :] *= (1 - colors)
     x = images.flatten(start_dim=1)
 
-    y, e = y[:, None].float(), e[:, None]
-    return e, digits, y, colors, x
+    y = y[:, None].float()
+    e = e[:, None]
+    c = digits[:, None].float()
+    s = torch.tensor(colors.squeeze())[:, None].float()
+    return x, y, e, c, s
 
 
 def make_test_data(batch_size):
@@ -78,26 +81,30 @@ def make_test_data(batch_size):
     images[:, 0, :, :] *= colors
     images[:, 1, :, :] *= (1 - colors)
     x = images.flatten(start_dim=1)
+
     y = y[:, None].float()
-    return make_dataloader((x, y), batch_size, False)
+    e = torch.full_like(y, np.nan)
+    c = digits[:, None].float()
+    s = torch.tensor(colors.squeeze())[:, None].float()
+    return make_dataloader((x, y, e, c, s), batch_size, False)
 
 
 def make_data(train_ratio, batch_size):
-    e, digits, y, colors, x = make_trainval_data()
+    x, y, e, c, s = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
     train_idxs = RNG.choice(np.arange(n_total), n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
-    x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
-    x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
-    data_train = make_dataloader((x_train, y_train, e_train), batch_size, True)
-    data_val = make_dataloader((x_val, y_val, e_val), batch_size, False)
+    x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
+    x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
+    data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
+    data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
     data_test = make_test_data(batch_size)
     return data_train, data_val, data_test
 
 
 def main():
-    e, digits, y, colors, x = make_trainval_data()
+    x, y, e, digits, colors = make_trainval_data()
     e, y, colors = e.squeeze(), y.squeeze(), colors.squeeze()
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
     axes[0].hist(digits[e == 0])

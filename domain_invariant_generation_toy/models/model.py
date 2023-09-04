@@ -17,18 +17,19 @@ class Encoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
         self.z_size = z_size
-        self.mu = MLP(x_size, h_sizes, N_ENVS * 2 * z_size)
-        self.cov = MLP(x_size, h_sizes, N_ENVS * (2 * z_size) ** 2)
+        self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * (2 * z_size) ** 2)
 
-    def forward(self, x, e):
+    def forward(self, x, y, e):
         batch_size = len(x)
+        y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         mu = self.mu(x)
-        mu = mu.reshape(batch_size, N_ENVS, 2 * self.z_size)
-        mu = mu[torch.arange(batch_size), e_idx, :]
+        mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
+        mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
         cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_ENVS, (2 * self.z_size) ** 2)
-        cov = arr_to_cholesky(cov[torch.arange(batch_size), e_idx, :])
+        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, (2 * self.z_size) ** 2)
+        cov = arr_to_cholesky(cov[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(mu, scale_tril=cov)
 
 
@@ -128,8 +129,8 @@ class Model(pl.LightningModule):
         return D.kl_divergence(prior_dist, standard_normal)
 
     def train_vae(self, x, y, e):
-        # z_c,z_s ~ q(z_c,z_s|x,e)
-        posterior_dist = self.encoder(x, e)
+        # z_c,z_s ~ q(z_c,z_s|x,y,e)
+        posterior_dist = self.encoder(x, y, e)
         z = self.sample_z(posterior_dist)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
@@ -139,8 +140,8 @@ class Model(pl.LightningModule):
         prior_reg = self.prior_reg(prior_dist).mean()
         return log_prob_x_z, kl, prior_reg
 
-    def train_inference_encoder(self, x, e):
-        posterior_dist = self.encoder(x, e)
+    def train_inference_encoder(self, x, y, e):
+        posterior_dist = self.encoder(x, y, e)
         inference_posterior_dist = self.inference_encoder(x)
         kl = D.kl_divergence(posterior_dist, inference_posterior_dist).mean()
         return kl
@@ -154,36 +155,34 @@ class Model(pl.LightningModule):
         return y_pred, log_prob_y_zc
 
     def training_step(self, batch, batch_idx):
+        x, y, e, c, s = batch
         if self.task == Task.TRAIN_VAE:
-            log_prob_x_z, kl, prior_reg = self.train_vae(*batch)
+            log_prob_x_z, kl, prior_reg = self.train_vae(x, y, e)
             loss = -log_prob_x_z  + kl + self.prior_reg_mult * prior_reg
             return loss
         elif self.task == Task.TRAIN_INFERENCE_ENCODER:
-            x, y, _ = batch
             kl = self.train_inference_encoder(x, y)
             loss = kl
             return loss
         elif self.task == Task.CLASSIFY:
-            x, y, _ = batch
             y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             return loss
 
     def validation_step(self, batch, batch_idx):
+        x, y, e, c, s = batch
         if self.task == Task.TRAIN_VAE:
-            log_prob_x_z, kl, prior_reg = self.train_vae(*batch)
+            log_prob_x_z, kl, prior_reg = self.train_vae(x, y, e)
             loss = -log_prob_x_z + kl + self.prior_reg_mult * prior_reg
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_prior_reg', prior_reg, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.TRAIN_INFERENCE_ENCODER:
-            x, y, _ = batch
             kl = self.train_inference_encoder(x, y)
             loss = kl
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.CLASSIFY:
-            x, y, _ = batch
             y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)

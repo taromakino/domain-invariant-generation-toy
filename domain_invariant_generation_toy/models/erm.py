@@ -14,21 +14,23 @@ class ERM(pl.LightningModule):
         self.model = MLP(x_size, h_sizes, 1)
         self.acc = Accuracy('binary')
 
-    def forward(self, x, y, e):
+    def forward(self, x, y):
         pred = self.model(x)
         return F.binary_cross_entropy_with_logits(pred, y)
 
     def training_step(self, batch, batch_idx):
-        loss = self.forward(*batch)
+        x, y, e, c, s = batch
+        loss = self.forward(x, y)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.forward(*batch)
+        x, y, e, c, s = batch
+        loss = self.forward(x, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, e, c, s = batch
         y_pred = self.model(x)
         y_pred_class = (torch.sigmoid(y_pred) > 0.5).int()
         acc = self.acc(y_pred_class, y)
