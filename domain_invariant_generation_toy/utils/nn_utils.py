@@ -27,7 +27,7 @@ def make_dataloader(data_tuple, batch_size, is_train):
     return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
-def arr_to_cov(arr):
+def arr_to_cholesky(arr):
     '''
     Assumes arr has nonnegative entries, e.g. is the output of a ReLU network
     '''
@@ -37,4 +37,4 @@ def arr_to_cov(arr):
     cov = torch.bmm(cov, torch.transpose(cov, 1, 2))
     diag_idxs = torch.arange(size)
     cov[:, diag_idxs, diag_idxs] += POS_DEF_EPS
-    return cov
+    return torch.cholesky(cov)

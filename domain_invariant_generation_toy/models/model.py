@@ -7,7 +7,7 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
-from utils.nn_utils import MLP, arr_to_cov
+from utils.nn_utils import MLP, arr_to_cholesky
 
 
 GAUSSIAN_INIT_SD = 0.1
@@ -29,7 +29,7 @@ class Encoder(nn.Module):
         mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
         cov = self.cov(x)
         cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, (2 * self.z_size) ** 2)
-        cov = arr_to_cov(cov[torch.arange(batch_size), y_idx, e_idx, :])
+        cov = arr_to_cholesky(cov[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(mu, scale_tril=cov)
 
 
@@ -76,7 +76,7 @@ class InferenceEncoder(nn.Module):
         self.cov = MLP(x_size, h_sizes, (2 * z_size) ** 2)
 
     def forward(self, x):
-        return D.MultivariateNormal(self.mu(x), arr_to_cov(self.cov(x)))
+        return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_cholesky(self.cov(x)))
 
 
 class Model(pl.LightningModule):
