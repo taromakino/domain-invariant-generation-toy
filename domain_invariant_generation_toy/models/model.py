@@ -80,8 +80,7 @@ class InferenceEncoder(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, prior_reg_mult, q_mult, weight_decay, lr,
-            lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, prior_reg_mult, weight_decay, lr):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
@@ -89,11 +88,8 @@ class Model(pl.LightningModule):
         self.task = task
         self.z_size = z_size
         self.prior_reg_mult = prior_reg_mult
-        self.q_mult = q_mult
         self.weight_decay = weight_decay
         self.lr = lr
-        self.lr_inference = lr_inference
-        self.n_steps = n_steps
         self.vae_params = []
         self.q_params = []
         # q(z_c|x,y,e)
