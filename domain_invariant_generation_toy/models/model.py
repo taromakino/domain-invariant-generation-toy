@@ -7,7 +7,7 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
-from utils.nn_utils import MLP, size_to_n_tril, arr_to_scale_tril
+from utils.nn_utils import MLP, arr_to_cov
 
 
 GAUSSIAN_INIT_SD = 0.1
@@ -18,7 +18,7 @@ class Encoder(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size))
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * (2 * z_size) ** 2)
 
     def forward(self, x, y, e):
         batch_size = len(x)
@@ -28,8 +28,8 @@ class Encoder(nn.Module):
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y_idx, e_idx, :]
         cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, size_to_n_tril(2 * self.z_size))
-        cov = arr_to_scale_tril(cov[torch.arange(batch_size), y_idx, e_idx, :])
+        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, (2 * self.z_size) ** 2)
+        cov = arr_to_cov(cov[torch.arange(batch_size), y_idx, e_idx, :])
         return D.MultivariateNormal(mu, scale_tril=cov)
 
 
@@ -72,11 +72,11 @@ class Prior(nn.Module):
 class InferenceEncoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mu = MLP(x_size, h_sizes, z_size)
-        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
+        self.mu = MLP(x_size, h_sizes, 2 * z_size)
+        self.cov = MLP(x_size, h_sizes, (2 * z_size) ** 2)
 
     def forward(self, x):
-        return D.MultivariateNormal(self.mu(x), arr_to_scale_tril(self.cov(x)))
+        return D.MultivariateNormal(self.mu(x), arr_to_cov(self.cov(x)))
 
 
 class Model(pl.LightningModule):
