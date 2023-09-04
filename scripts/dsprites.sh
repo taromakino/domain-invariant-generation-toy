@@ -11,28 +11,7 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task train_q
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z_train \
---batch_size 2048 \
---q_mult 1
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z_val \
---batch_size 2048 \
---q_mult 1
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z_test \
---batch_size 2048 \
---q_mult 1
+--task train_inference_encoder
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \

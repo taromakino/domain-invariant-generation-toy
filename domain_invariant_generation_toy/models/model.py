@@ -144,7 +144,7 @@ class Model(pl.LightningModule):
     def train_inference_encoder(self, x, y, e):
         posterior_dist = self.encoder(x, y, e)
         inference_posterior_dist = self.inference_encoder(x)
-        kl = D.kl_divergence(inference_posterior_dist, posterior_dist)
+        kl = D.kl_divergence(posterior_dist, inference_posterior_dist)
         return kl
 
     def classify(self, x, y):
