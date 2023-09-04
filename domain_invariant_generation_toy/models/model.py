@@ -193,8 +193,8 @@ class Model(pl.LightningModule):
             self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
+        x, y, e, c, s = batch
         if self.task == Task.CLASSIFY:
-            x, y = batch
             y_pred, log_prob_y_zc = self.classify(x, y)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.test_acc.update(y_pred_class, y.long())
