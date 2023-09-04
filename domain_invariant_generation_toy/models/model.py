@@ -207,7 +207,7 @@ class Model(pl.LightningModule):
             self.val_acc.update(c_pred_class, c.long())
 
     def on_validation_epoch_end(self):
-        if self.task == Task.CLASSIFY:
+        if self.task == Task.CLASSIFY or self.task == Task.CLASSIFY_C_ZC:
             self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
@@ -222,7 +222,7 @@ class Model(pl.LightningModule):
             self.test_acc.update(c_pred_class, c.long())
 
     def on_test_epoch_end(self):
-        if self.task == Task.CLASSIFY:
+        if self.task == Task.CLASSIFY or self.task == Task.CLASSIFY_C_ZC:
             self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
