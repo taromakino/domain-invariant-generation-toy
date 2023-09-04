@@ -153,6 +153,14 @@ class Model(pl.LightningModule):
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
+    def classify_c_zc(self, x, c):
+        inference_posterior_dist = self.inference_encoder(x)
+        z = inference_posterior_dist.loc
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        c_pred = self.classifier(z_c)
+        log_prob_c_zc = -F.binary_cross_entropy_with_logits(c_pred, c)
+        return c_pred, log_prob_c_zc
+
     def training_step(self, batch, batch_idx):
         x, y, e, c, s = batch
         if self.task == Task.TRAIN_VAE:
@@ -166,6 +174,10 @@ class Model(pl.LightningModule):
         elif self.task == Task.CLASSIFY:
             y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
+            return loss
+        elif self.task == Task.CLASSIFY_C_ZC:
+            c_pred, log_prob_c_zc = self.classify(x, c)
+            loss = -log_prob_c_zc
             return loss
 
     def validation_step(self, batch, batch_idx):
@@ -187,6 +199,12 @@ class Model(pl.LightningModule):
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.val_acc.update(y_pred_class, y.long())
+        elif self.task == Task.CLASSIFY_C_ZC:
+            c_pred, log_prob_c_zc = self.classify(x, c)
+            loss = -log_prob_c_zc
+            self.log('val_loss', loss, on_step=False, on_epoch=True)
+            c_pred_class = (torch.sigmoid(c_pred) > 0.5).long()
+            self.val_acc.update(c_pred_class, c.long())
 
     def on_validation_epoch_end(self):
         if self.task == Task.CLASSIFY:
@@ -198,6 +216,10 @@ class Model(pl.LightningModule):
             y_pred, log_prob_y_zc = self.classify(x, y)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.test_acc.update(y_pred_class, y.long())
+        elif self.task == Task.CLASSIFY_C_ZC:
+            c_pred, log_prob_c_zc = self.classify(x, c)
+            c_pred_class = (torch.sigmoid(c_pred) > 0.5).long()
+            self.test_acc.update(c_pred_class, c.long())
 
     def on_test_epoch_end(self):
         if self.task == Task.CLASSIFY:
@@ -218,7 +240,7 @@ class Model(pl.LightningModule):
                 params.requires_grad = True
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        elif self.task == Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY or self.task == Task.CLASSIFY_C_ZC:
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.inference_encoder.parameters():
@@ -231,5 +253,5 @@ class Model(pl.LightningModule):
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
         elif self.task == Task.TRAIN_INFERENCE_ENCODER:
             return Adam(self.inference_encoder.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task == Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY or self.task == Task.CLASSIFY_C_ZC:
             return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)
