@@ -39,7 +39,7 @@ def make_trainval_data():
     brightness[idxs_y0_e1] = RNG.normal(0.5, 0.05, len(idxs_y0_e1))
     brightness[idxs_y1_e0] = RNG.normal(0.5, 0.05, len(idxs_y1_e0))
     brightness[idxs_y1_e1] = RNG.normal(0.8, 0.05, len(idxs_y1_e1))
-    brightness = np.clip(brightness, 0, 1)[:, None]
+    brightness = np.clip(brightness, 0, 1)
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
     center_y = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
@@ -54,9 +54,13 @@ def make_trainval_data():
         y_ub = int(center_y[idx] + half_width_ceil)
         x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
     x = x.reshape(len(x), -1)
-    x, y, e = torch.tensor(x), torch.tensor(y), torch.tensor(e)
-    x, y, e = x.float(), y[:, None].float(), e[:, None].float()
-    return e, width, y, brightness, x
+
+    x = torch.tensor(x, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.float32)[:, None]
+    e = torch.tensor(e, dtype=torch.float32)[:, None]
+    c = torch.tensor(width, dtype=torch.float32)[:, None]
+    s = torch.tensor(brightness, dtype=torch.float32)[:, None]
+    return x, y, e, c, s
 
 
 def make_test_data(batch_size):
@@ -76,7 +80,7 @@ def make_test_data(batch_size):
     idxs_y1 = np.where(y == 1)[0]
     brightness[idxs_y0] = RNG.normal(0.8, 0.05, len(idxs_y0))
     brightness[idxs_y1] = RNG.normal(0.2, 0.05, len(idxs_y1))
-    brightness = np.clip(brightness, 0, 1)[:, None]
+    brightness = np.clip(brightness, 0, 1)
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
     center_y = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
@@ -91,21 +95,25 @@ def make_test_data(batch_size):
         y_ub = int(center_y[idx] + half_width_ceil)
         x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
     x = x.reshape(len(x), -1)
-    x, y = torch.tensor(x), torch.tensor(y)
-    x, y = x.float(), y[:, None].float()
-    return make_dataloader((x, y), batch_size, False)
+
+    x = torch.tensor(x, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.float32)[:, None]
+    e = torch.full_like(y, np.nan)
+    c = torch.tensor(width, dtype=torch.float32)[:, None]
+    s = torch.tensor(brightness, dtype=torch.float32)[:, None]
+    return make_dataloader((x, y, e, c, s), batch_size, False)
 
 
 def make_data(train_ratio, batch_size):
-    e, width, y, brightness, x = make_trainval_data()
-    n_total = len(x)
+    x, y, e, c, s = make_trainval_data()
+    n_total = len(e)
     n_train = int(train_ratio * n_total)
     train_idxs = RNG.choice(np.arange(n_total), n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
-    x_train, y_train, e_train = x[train_idxs], y[train_idxs], e[train_idxs]
-    x_val, y_val, e_val = x[val_idxs], y[val_idxs], e[val_idxs]
-    data_train = make_dataloader((x_train, y_train, e_train), batch_size, True)
-    data_val = make_dataloader((x_val, y_val, e_val), batch_size, False)
+    x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
+    x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
+    data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
+    data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
     data_test = make_test_data(batch_size)
     return data_train, data_val, data_test
 
