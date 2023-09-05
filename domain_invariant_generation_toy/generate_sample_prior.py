@@ -22,12 +22,12 @@ def main(args):
     task_dpath = os.path.join(args.dpath, Task.TRAIN_VAE.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
+    data_train, data_val, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
-    x_train, y_train, e_train, c_train, s_train = data_train.dataset[:]
-    x_train, y_train, e_train = x_train.to(model.device), y_train.to(model.device), e_train.to(model.device)
+    x, y, e, c, s = data_val.dataset[:]
+    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     for example_idx in range(args.n_examples):
-        x_seed, y_seed, e_seed = x_train[[example_idx]], y_train[[example_idx]], e_train[[example_idx]]
+        x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
         posterior_dist_seed = model.encoder(x_seed, y_seed, e_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
@@ -43,7 +43,7 @@ def main(args):
         plot(axes[0, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         plot(axes[1, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         for col_idx in range(2, args.n_cols):
-            zc_sample, zs_sample = sample_prior(rng, model, y_train, e_train)
+            zc_sample, zs_sample = sample_prior(rng, model, y, e)
             x_pred_causal = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_sample, zs_seed))))
             x_pred_spurious = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_seed, zs_sample))))
             plot(axes[0, col_idx], x_pred_causal.reshape(image_size).detach().cpu().numpy())
