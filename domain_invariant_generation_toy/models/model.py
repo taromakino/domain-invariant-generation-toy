@@ -213,25 +213,29 @@ class Model(pl.LightningModule):
         return optim_z, optim_log_prob_x_z, optim_log_prob_z, optim_loss
 
     def training_step(self, batch, batch_idx):
-        x, y, e, c, s = batch
         if self.task == Task.TRAIN_VAE:
+            x, y, e, c, s = batch
             log_prob_x_z, kl, prior_reg = self.train_vae(x, y, e)
             loss = -log_prob_x_z  + kl + self.prior_reg_mult * prior_reg
             return loss
         elif self.task == Task.TRAIN_Q:
+            x, y, e, c, s = batch
             log_prob_z = self.train_q(x, y, e)
             loss = -log_prob_z
             return loss
         elif self.task == Task.CLASSIFY_Y_ZC:
-            y_pred, log_prob_y_zc = self.classify_y_zc(x, y)
+            z, y, c, s = batch
+            y_pred, log_prob_y_zc = self.classify_y_zc(z, y)
             loss = -log_prob_y_zc
             return loss
         elif self.task == Task.CLASSIFY_C_ZC:
-            c_pred, log_prob_c_zc = self.classify_c_zc(x, c)
+            z, y, c, s = batch
+            c_pred, log_prob_c_zc = self.classify_c_zc(z, c)
             loss = -log_prob_c_zc
             return loss
         elif self.task == Task.REGRESS_S_ZC:
-            s_pred, mse_s_zc = self.regress_s_zc(x, s)
+            z, y, c, s = batch
+            s_pred, mse_s_zc = self.regress_s_zc(z, s)
             loss = mse_s_zc
             return loss
 
