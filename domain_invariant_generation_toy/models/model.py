@@ -164,7 +164,7 @@ class Model(pl.LightningModule):
 
     def classify_y_zc(self, z, y):
         z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.classifier(z_c)
+        y_pred = self.classifier_y_zc(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
@@ -258,7 +258,7 @@ class Model(pl.LightningModule):
             self.val_acc.update(y_pred_class, y.long())
         elif self.task == Task.CLASSIFY_C_ZC:
             z, y, c, s = batch
-            c_pred, log_prob_c_zc = self.classify_y_zc(z, c)
+            c_pred, log_prob_c_zc = self.classify_c_zc(z, c)
             loss = -log_prob_c_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             c_pred_class = (torch.sigmoid(c_pred) > 0.5).long()
