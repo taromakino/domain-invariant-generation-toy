@@ -32,7 +32,7 @@ def main(args):
     task_dpath = os.path.join(args.dpath, args.task.value)
     save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
-    if args.task == Task.ERM_Y_X or args.task == Task.ERM_C_X:
+    if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_X or args.task == Task.ERM_C_X:
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--is_erm', action='store_true')
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
-    parser.add_argument('--posterior_reg_mult', type=float, default=1e-5)
+    parser.add_argument('--posterior_reg_mult', type=float, default=1)
     parser.add_argument('--q_mult', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
