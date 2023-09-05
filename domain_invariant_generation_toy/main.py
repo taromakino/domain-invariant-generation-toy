@@ -59,11 +59,11 @@ def main(args):
         else:
             trainer.test(model, data_test)
     else:
-        z_train, y_train, c_train, s_train, _ = torch.load(os.path.join(args.dpath, Task.INFER_Z_TRAIN.value,
+        z_train, y_train, c_train, s_train, x_train = torch.load(os.path.join(args.dpath, Task.INFER_Z_TRAIN.value,
             f'version_{args.seed}', 'infer.pt'))
-        z_val, y_val, c_val, s_val, _ = torch.load(os.path.join(args.dpath, Task.INFER_Z_VAL.value,
+        z_val, y_val, c_val, s_val, x_val = torch.load(os.path.join(args.dpath, Task.INFER_Z_VAL.value,
             f'version_{args.seed}',  'infer.pt'))
-        z_test, y_test, c_test, s_test, _ = torch.load(os.path.join(args.dpath, Task.INFER_Z_TEST.value,
+        z_test, y_test, c_test, s_test, x_test = torch.load(os.path.join(args.dpath, Task.INFER_Z_TEST.value,
             f'version_{args.seed}', 'infer.pt'))
         infer_data_train = make_dataloader((z_train, y_train, c_train, s_train), args.batch_size, True)
         infer_data_val = make_dataloader((z_val, y_val, c_val, s_val), args.batch_size, False)
