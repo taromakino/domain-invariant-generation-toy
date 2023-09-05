@@ -2,7 +2,8 @@ from enum import Enum
 
 
 class Task(Enum):
-    ERM = 'erm'
+    ERM_Y_X = 'erm_y_x'
+    ERM_C_X = 'erm_c_x'
     TRAIN_VAE = 'train_vae'
     TRAIN_Q = 'train_q'
     INFER_Z_TRAIN = 'infer_z_train'
