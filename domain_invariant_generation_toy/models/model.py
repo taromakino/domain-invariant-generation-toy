@@ -119,7 +119,7 @@ class Model(pl.LightningModule):
         self.classifier_c_zc = MLP(z_size, h_sizes, 1)
         # p(s|z_c)
         self.regressor_s_zc = MLP(z_size, h_sizes, 1)
-        self.z, self.y, self.c, self.s = [], [], [], []
+        self.z, self.y, self.c, self.s, self.x = [], [], [], [], []
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.val_rsq = R2Score()
@@ -289,6 +289,7 @@ class Model(pl.LightningModule):
                 self.y.append(y.cpu())
                 self.c.append(c.cpu())
                 self.s.append(s.cpu())
+                self.x.append(x.cpu())
         elif self.task == Task.CLASSIFY_Y_ZC:
             z, y, c, s = batch
             y_pred, log_prob_y_zc = self.classify_y_zc(z, y)
@@ -306,8 +307,8 @@ class Model(pl.LightningModule):
 
     def on_test_epoch_end(self):
         if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
-            z, y, c, s = torch.cat(self.z), torch.cat(self.y), torch.cat(self.c), torch.cat(self.s)
-            torch.save((z, y, c, s), os.path.join(self.dpath, f'version_{self.seed}', 'infer.pt'))
+            z, y, c, s, x = torch.cat(self.z), torch.cat(self.y), torch.cat(self.c), torch.cat(self.s), torch.cat(self.x)
+            torch.save((z, y, c, s, x), os.path.join(self.dpath, f'version_{self.seed}', 'infer.pt'))
         elif self.task == Task.CLASSIFY_Y_ZC or self.task == Task.CLASSIFY_C_ZC:
             self.log('test_acc', self.test_acc.compute())
         elif self.task == Task.REGRESS_S_ZC:
