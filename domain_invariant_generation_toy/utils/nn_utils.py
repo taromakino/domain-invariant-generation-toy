@@ -41,10 +41,10 @@ def n_tril_to_size(n_tril):
 
 def arr_to_tril(arr):
     '''
-    Return a lower triangular matrix with nonnegative diagonal entries
+    Return a lower triangular matrix with nonzero diagonal entries
     '''
-    batch_size, n_tri = arr.shape
-    size = n_tril_to_size(n_tri)
+    batch_size, n_tril = arr.shape
+    size = n_tril_to_size(n_tril)
     tril = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
     tril[:, *torch.tril_indices(size, size)] = arr
     diag_idxs = torch.arange(size)

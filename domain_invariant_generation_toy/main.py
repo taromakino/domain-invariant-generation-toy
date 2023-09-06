@@ -1,6 +1,5 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, X_SIZE
 from models.erm import ERM
@@ -75,5 +74,4 @@ if __name__ == '__main__':
     parser.add_argument('--n_steps', type=int, default=5000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
-    args = parser.parse_args()
-    main(args)
+    main(parser.parse_args())

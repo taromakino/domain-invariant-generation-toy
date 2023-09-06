@@ -156,7 +156,8 @@ class Model(pl.LightningModule):
 
     def train_q(self, x, y, e):
         posterior_dist = self.encoder(x, y, e)
-        z_c, z_s = torch.chunk(posterior_dist.loc, 2, dim=1)
+        z = self.sample_z(posterior_dist)
+        z_c, z_s = torch.chunk(z, 2, dim=1)
         log_prob_zc = self.q_causal().log_prob(z_c).mean()
         log_prob_zs = self.q_spurious().log_prob(z_s).mean()
         log_prob_z = log_prob_zc + log_prob_zs
