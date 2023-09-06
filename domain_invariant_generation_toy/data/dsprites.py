@@ -23,11 +23,11 @@ def make_trainval_data():
     e[idxs_env1] = 1
 
     width = np.full(N_TRAINVAL, np.nan)
-    width[idxs_env0] = (RNG.normal(18, 4, len(idxs_env0))).astype(int)
-    width[idxs_env1] = (RNG.normal(22, 4, len(idxs_env1))).astype(int)
+    width[idxs_env0] = (RNG.normal(18, 6, len(idxs_env0))).astype(int)
+    width[idxs_env1] = (RNG.normal(22, 6, len(idxs_env1))).astype(int)
     width = np.clip(width, WIDTH_LB, WIDTH_UB)
 
-    y = min_max_scale(width ** 2)
+    y = min_max_scale(width)
     y = RNG.binomial(1, y, len(y))
 
     brightness = np.full(N_TRAINVAL, np.nan)
@@ -119,8 +119,9 @@ def make_data(train_ratio, batch_size):
 
 
 def main():
-    e, width, y, brightness, x = make_trainval_data()
-    e, y, brightness = e.squeeze(), y.squeeze(), brightness.squeeze()
+    x, y, e, c, s = make_trainval_data()
+    width = c
+    brightness = s
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
     hist_discrete(axes[0], width[e == 0])
     hist_discrete(axes[1], width[e == 1])

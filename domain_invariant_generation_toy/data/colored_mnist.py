@@ -104,8 +104,9 @@ def make_data(train_ratio, batch_size):
 
 
 def main():
-    x, y, e, digits, colors = make_trainval_data()
-    e, y, colors = e.squeeze(), y.squeeze(), colors.squeeze()
+    x, y, e, c, s = make_trainval_data()
+    digits = c
+    colors = s
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
     axes[0].hist(digits[e == 0])
     axes[1].hist(digits[e == 1])

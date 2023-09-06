@@ -9,7 +9,6 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task
 from utils.file import save_file
-from utils.nn_utils import make_dataloader
 
 
 def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
@@ -32,7 +31,7 @@ def main(args):
     task_dpath = os.path.join(args.dpath, args.task.value)
     save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
-    if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_X or args.task == Task.ERM_C_X:
+    if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
