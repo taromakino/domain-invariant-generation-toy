@@ -146,7 +146,7 @@ class Model(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.causal_classifier(z_c.detach())
+        y_pred = self.classifier(z_c.detach())
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
@@ -193,7 +193,7 @@ class Model(pl.LightningModule):
     def inference_loss(self, x, z, q_causal, q_spurious):
         log_prob_x_z = self.decoder(x, z).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
-        prob_y_pos_zc = torch.sigmoid(self.causal_classifier(z_c))
+        prob_y_pos_zc = torch.sigmoid(self.classifier(z_c))
         prob_y_neg_zc = 1 - prob_y_pos_zc
         prob_y_zc = torch.hstack((prob_y_neg_zc, prob_y_pos_zc))
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
@@ -226,7 +226,7 @@ class Model(pl.LightningModule):
                 optim_log_prob_z = log_prob_z
                 optim_z = z_param.clone()
         optim_zc, optim_zs = torch.chunk(optim_z, 2, dim=1)
-        return self.causal_classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
+        return self.classifier(optim_zc), optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
