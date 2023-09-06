@@ -23,8 +23,8 @@ def make_trainval_data():
     e[idxs_env1] = 1
 
     width = np.full(N_TRAINVAL, np.nan)
-    width[idxs_env0] = (RNG.normal(18, 6, len(idxs_env0))).astype(int)
-    width[idxs_env1] = (RNG.normal(22, 6, len(idxs_env1))).astype(int)
+    width[idxs_env0] = (RNG.normal(22, 6, len(idxs_env1))).astype(int)
+    width[idxs_env1] = (RNG.normal(18, 6, len(idxs_env0))).astype(int)
     width = np.clip(width, WIDTH_LB, WIDTH_UB)
 
     y = min_max_scale(width)

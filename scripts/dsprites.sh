@@ -6,7 +6,8 @@ export DPATH=$RESULTS_DPATH/$DATASET
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task train_vae
+--task train_vae \
+--posterior_reg_mult 0
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
