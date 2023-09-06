@@ -49,7 +49,7 @@ def arr_to_tril(arr):
     tril[:, *torch.tril_indices(size, size)] = arr
     diag_idxs = torch.arange(size)
     tril[:, diag_idxs, diag_idxs] = F.softplus(tril[:, diag_idxs, diag_idxs])
-    return tril.squeeze()
+    return tril
 
 
 def tril_to_cov(tril):

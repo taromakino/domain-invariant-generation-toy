@@ -17,7 +17,7 @@ def main(args):
     model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     q_causal = model.q_causal()
     q_spurious = model.q_spurious()
-    x, y, e, c, s = data_val.dataset[:]
+    x, y, e, c, s = data_train.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
