@@ -41,16 +41,26 @@ def n_tril_to_size(n_tril):
 
 def arr_to_tril(arr):
     '''
-    Assumes arr has nonnegative entries, e.g. is the output of a ReLU network
+    Return a lower triangular matrix with nonnegative diagonal entries
     '''
-    if len(arr.shape) == 1:
-        batch_size = 1
-        n_tri = len(arr)
-    else:
-        batch_size, n_tri = arr.shape
+    batch_size, n_tri = arr.shape
     size = n_tril_to_size(n_tri)
     tril = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
     tril[:, *torch.tril_indices(size, size)] = arr
     diag_idxs = torch.arange(size)
     tril[:, diag_idxs, diag_idxs] = F.softplus(tril[:, diag_idxs, diag_idxs])
     return tril.squeeze()
+
+
+def tril_to_cov(tril):
+    '''
+    Return a full covariance matrix
+    '''
+    return torch.bmm(tril, torch.transpose(tril, 1, 2))
+
+
+def arr_to_cov(arr):
+    '''
+    Return a full covariance matrix
+    '''
+    return tril_to_cov(arr_to_tril(arr))

@@ -51,3 +51,7 @@ python $CODE_DPATH/generate_sample_prior.py \
 
 python $CODE_DPATH/generate_sample_q.py \
 --dpath $DPATH
+
+python $CODE_DPATH/generate_from_infer.py \
+--dpath $DPATH \
+--stage test

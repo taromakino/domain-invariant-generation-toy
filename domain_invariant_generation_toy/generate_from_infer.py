@@ -23,7 +23,7 @@ def main(args):
     else:
         z, y, c, s, x = torch.load(os.path.join(args.dpath, Task.INFER_Z_TEST.value, f'version_{args.seed}', 'infer.pt'))
     for example_idx in range(args.n_examples):
-        x_seed, z_seed = x[[example_idx]], z[[example_idx]]
+        x_seed, z_seed = x[[example_idx]], z[[example_idx]].to(model.device)
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, args.n_cols, figsize=(2 * args.n_cols, 2 * 2))
         for ax in axes.flatten():

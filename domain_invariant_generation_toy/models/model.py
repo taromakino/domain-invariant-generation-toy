@@ -8,7 +8,7 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy, R2Score
 from utils.enums import Task
-from utils.nn_utils import MLP, size_to_n_tril, arr_to_tril
+from utils.nn_utils import MLP, size_to_n_tril, arr_to_tril, arr_to_cov
 
 
 GAUSSIAN_INIT_SD = 0.1
@@ -49,41 +49,47 @@ class Prior(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
+        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(z_size)))
         nn.init.normal_(self.mu_causal, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_causal, 0, GAUSSIAN_INIT_SD)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
+        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(z_size)))
         nn.init.normal_(self.mu_spurious, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_spurious, 0, GAUSSIAN_INIT_SD)
 
     def forward(self, y, e):
+        batch_size = len(y)
         y_idx = y.int()[:, 0]
         e_idx = e.int()[:, 0]
         mu_causal = self.mu_causal[e_idx]
         mu_spurious = self.mu_spurious[y_idx, e_idx]
         mu = torch.hstack((mu_causal, mu_spurious))
-        cov_causal = F.softplus(self.cov_causal[e_idx])
-        cov_spurious = F.softplus(self.cov_spurious[y_idx, e_idx])
-        cov = torch.hstack((cov_causal, cov_spurious))
-        return D.MultivariateNormal(mu, torch.diag_embed(cov))
+        cov_causal = arr_to_cov(self.cov_causal[e_idx])
+        cov_spurious = arr_to_cov(self.cov_spurious[y_idx, e_idx])
+        cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=y.device)
+        cov[:, :self.z_size, :self.z_size] = cov_causal
+        cov[:, self.z_size:, self.z_size:] = cov_spurious
+        return D.MultivariateNormal(mu, cov)
 
 
 class AggregatedPosterior(nn.Module):
-    def __init__(self, z_size):
+    def __init__(self, z_size, n_components):
         super().__init__()
-        self.mu = nn.Parameter(torch.zeros(z_size))
-        self.cov = nn.Parameter(torch.zeros(size_to_n_tril(z_size)))
+        self.logits = nn.Parameter(torch.ones(n_components))
+        self.mu = nn.Parameter(torch.zeros(n_components, z_size))
+        self.cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(z_size)))
         nn.init.normal_(self.mu, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
 
     def forward(self):
-        return D.MultivariateNormal(self.mu, scale_tril=arr_to_tril(self.cov))
+        mixture_dist = D.Categorical(logits=self.logits)
+        component_dist = D.MultivariateNormal(self.mu, scale_tril=arr_to_tril(self.cov))
+        return D.MixtureSameFamily(mixture_dist, component_dist)
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, posterior_reg_mult, q_mult, weight_decay, lr,
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, n_components, posterior_reg_mult, q_mult, weight_decay, lr,
             lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
@@ -108,10 +114,10 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # q(z_c)
-        self.q_causal = AggregatedPosterior(z_size)
+        self.q_causal = AggregatedPosterior(z_size, n_components)
         self.q_params += list(self.q_causal.parameters())
         # q(z_s)
-        self.q_spurious = AggregatedPosterior(z_size)
+        self.q_spurious = AggregatedPosterior(z_size, n_components)
         self.q_params += list(self.q_spurious.parameters())
         # p(y|z_c)
         self.classifier_y_zc = MLP(z_size, h_sizes, 1)
