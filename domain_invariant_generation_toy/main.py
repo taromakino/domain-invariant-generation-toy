@@ -48,32 +48,12 @@ def main(args):
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, lr=args.lr)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
-    elif args.task == Task.INFER_Z_TRAIN or args.task == Task.INFER_Z_VAL or args.task == Task.INFER_Z_TEST:
+    else:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_Q.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, q_mult=args.q_mult,
             lr_inference=args.lr_inference, n_steps=args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
-        if args.task == Task.INFER_Z_TRAIN:
-            trainer.test(model, data_train)
-        elif args.task == Task.INFER_Z_VAL:
-            trainer.test(model, data_val)
-        else:
-            trainer.test(model, data_test)
-    else:
-        z_train, y_train, c_train, s_train, x_train = torch.load(os.path.join(args.dpath, Task.INFER_Z_TRAIN.value,
-            f'version_{args.seed}', 'infer.pt'))
-        z_val, y_val, c_val, s_val, x_val = torch.load(os.path.join(args.dpath, Task.INFER_Z_VAL.value,
-            f'version_{args.seed}',  'infer.pt'))
-        z_test, y_test, c_test, s_test, x_test = torch.load(os.path.join(args.dpath, Task.INFER_Z_TEST.value,
-            f'version_{args.seed}', 'infer.pt'))
-        infer_data_train = make_dataloader((z_train, y_train, c_train, s_train), args.batch_size, True)
-        infer_data_val = make_dataloader((z_val, y_val, c_val, s_val), args.batch_size, False)
-        infer_data_test = make_dataloader((z_test, y_test, c_test, s_test), args.batch_size, False)
-        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_Q.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
-        trainer.fit(model, infer_data_train, infer_data_val)
-        trainer.test(model, infer_data_test, ckpt_path='best')
+        trainer.test(model, data_test)
 
 
 if __name__ == '__main__':
