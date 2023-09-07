@@ -39,7 +39,7 @@ def main(args):
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.TRAIN_VAE:
         model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes,
-            args.z_norm_mult, args.lr, args.lr_inference, args.n_steps)
+            args.z_norm_mult, args.wd, args.lr, args.lr_inference, args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.INFER_Z_TRAIN or args.task == Task.INFER_Z_VAL or args.task == Task.INFER_Z_TEST:
@@ -79,6 +79,7 @@ if __name__ == '__main__':
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
     parser.add_argument('--z_norm_mult', type=float, default=1e-3)
+    parser.add_argument('--wd', type=float, default=1e-3)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=0.01)
     parser.add_argument('--n_steps', type=int, default=5000)

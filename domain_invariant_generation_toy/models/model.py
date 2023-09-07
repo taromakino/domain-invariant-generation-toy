@@ -74,7 +74,7 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, lr, lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, wd, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
@@ -82,6 +82,7 @@ class Model(pl.LightningModule):
         self.task = task
         self.z_size = z_size
         self.z_norm_mult = z_norm_mult
+        self.wd = wd
         self.lr = lr
         self.lr_inference = lr_inference
         self.n_steps = n_steps
@@ -227,6 +228,6 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         if self.task == Task.TRAIN_VAE:
-            return Adam(self.vae_params, lr=self.lr)
+            return Adam(self.vae_params, lr=self.lr, weight_decay=self.wd)
         elif self.task == Task.CLASSIFY:
-            return Adam(self.classifier.parameters(), lr=self.lr)
+            return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.wd)
