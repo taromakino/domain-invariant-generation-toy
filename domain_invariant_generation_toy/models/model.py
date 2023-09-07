@@ -91,13 +91,13 @@ class Model(pl.LightningModule):
         self.vae_params += list(self.encoder.parameters())
         # p(x|z_c,z_s)
         self.decoder = Decoder(x_size, z_size, h_sizes)
-        self.vae_params += list(self.encoder.parameters())
+        self.vae_params += list(self.decoder.parameters())
         # p(z_c,z_s|y,e)
         self.prior = Prior(z_size)
-        self.vae_params += list(self.encoder.parameters())
+        self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
         self.vae_classifier = MLP(z_size, h_sizes, 1)
-        self.vae_params += list(self.encoder.parameters())
+        self.vae_params += list(self.vae_classifier.parameters())
         self.classifier = MLP(z_size, h_sizes, 1)
         self.z_c, self.y = [], []
         self.val_acc = Accuracy('binary')
@@ -232,6 +232,11 @@ class Model(pl.LightningModule):
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = True
+        else:
+            for params in self.vae_params:
+                params.requires_grad = False
+            for params in self.classifier.parameters():
+                params.requires_grad = False
 
     def configure_optimizers(self):
         if self.task == Task.TRAIN_VAE:
