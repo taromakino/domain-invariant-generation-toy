@@ -6,13 +6,7 @@ export DPATH=$RESULTS_DPATH/$DATASET
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task train_vae \
---posterior_reg_mult 1
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task train_q
+--task train_vae
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
@@ -21,7 +15,4 @@ python $CODE_DPATH/main.py \
 --batch_size 2048
 
 python $CODE_DPATH/generate_sample_prior.py \
---dpath $DPATH
-
-python $CODE_DPATH/generate_sample_q.py \
 --dpath $DPATH
