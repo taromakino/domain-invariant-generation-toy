@@ -42,8 +42,8 @@ def main(args):
         trainer.fit(model, data_train, data_val)
     else:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, q_mult=args.q_mult,
-            lr_inference=args.lr_inference, n_steps=args.n_steps)
+        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task, lr_inference=args.lr_inference,
+            n_steps=args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
         trainer.test(model, data_test)
 
