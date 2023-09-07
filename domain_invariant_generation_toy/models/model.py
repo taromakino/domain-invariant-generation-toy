@@ -163,12 +163,8 @@ class Model(pl.LightningModule):
 
     def inference(self, x):
         batch_size = len(x)
-        q_causal = self.q_causal()
-        q_spurious = self.q_spurious()
-        zc_sample = q_causal.sample((batch_size,))
-        zs_sample = q_spurious.sample((batch_size,))
-        z_sample = torch.cat((zc_sample, zs_sample), dim=1)
-        z_param = nn.Parameter(z_sample.to(self.device))
+        z_param = nn.Parameter(torch.zeros(batch_size, 2 * self.z_size).to(self.device))
+        nn.init.normal_(z_param, 0, GAUSSIAN_INIT_SD)
         optim = Adam([z_param], lr=self.lr_inference)
         optim_loss = torch.inf
         optim_log_prob_x_z = optim_log_prob_y_zc = optim_z_norm = optim_z = None
