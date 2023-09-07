@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--is_erm', action='store_true')
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
-    parser.add_argument('--z_norm_mult', type=float, default=1)
+    parser.add_argument('--z_norm_mult', type=float, default=1e-3)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_inference', type=float, default=0.01)

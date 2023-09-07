@@ -72,21 +72,6 @@ class Prior(nn.Module):
         return D.MultivariateNormal(mu, cov)
 
 
-class AggregatedPosterior(nn.Module):
-    def __init__(self, z_size, n_components):
-        super().__init__()
-        self.logits = nn.Parameter(torch.ones(n_components))
-        self.mu = nn.Parameter(torch.zeros(n_components, z_size))
-        self.cov = nn.Parameter(torch.zeros(n_components, size_to_n_tril(z_size)))
-        nn.init.normal_(self.mu, 0, GAUSSIAN_INIT_SD)
-        nn.init.normal_(self.cov, 0, GAUSSIAN_INIT_SD)
-
-    def forward(self):
-        mixture_dist = D.Categorical(logits=self.logits)
-        component_dist = D.MultivariateNormal(self.mu, scale_tril=arr_to_tril(self.cov))
-        return D.MixtureSameFamily(mixture_dist, component_dist)
-
-
 class Model(pl.LightningModule):
     def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
