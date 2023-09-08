@@ -178,6 +178,9 @@ class Model(pl.LightningModule):
         elif self.task == Task.INFERENCE:
             y_pred, log_prob_x_z, log_prob_y_zc, z_norm = self.classify(x, y)
             loss = -log_prob_x_z - log_prob_y_zc + self.z_norm_mult * z_norm
+            self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+            self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
             self.val_acc.update(y_pred_class, y.long())
