@@ -244,4 +244,4 @@ class Model(pl.LightningModule):
         if self.task == Task.TRAIN_VAE:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
         elif self.task == Task.TRAIN_CLASSIFIER:
-            return Adam(self.classifer.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)
