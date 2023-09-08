@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
     parser.add_argument('--z_norm_mult', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
-    parser.add_argument('--n_steps', type=int, default=5000)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     main(parser.parse_args())
