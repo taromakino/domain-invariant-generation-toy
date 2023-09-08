@@ -12,25 +12,8 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task infer_z_train \
+--task inference \
 --batch_size 2048
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z_val \
---batch_size 2048
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z_test \
---batch_size 2048
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task classify \
 
 python $CODE_DPATH/generate_sample_prior.py \
 --dpath $DPATH
