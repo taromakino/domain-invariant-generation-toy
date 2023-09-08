@@ -1,4 +1,3 @@
-import os
 import pytorch_lightning as pl
 import torch
 import torch.distributions as D
@@ -88,7 +87,7 @@ class ZSampler(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
@@ -98,8 +97,6 @@ class Model(pl.LightningModule):
         self.z_norm_mult = z_norm_mult
         self.weight_decay = weight_decay
         self.lr = lr
-        self.lr_inference = lr_inference
-        self.n_steps = n_steps
         self.train_params, self.inference_params = [], []
         # q(z_c|x,y,e)
         self.encoder = Encoder(x_size, z_size, h_sizes)
@@ -200,7 +197,7 @@ class Model(pl.LightningModule):
 
     def on_test_epoch_end(self):
         if self.task == Task.INFERENCE:
-            self.log('test_acc', self.val_acc.compute())
+            self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
         if self.task == Task.TRAIN:
