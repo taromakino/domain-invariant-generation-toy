@@ -73,13 +73,15 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, y_mult, z_norm_mult, weight_decay, lr, lr_inference,
+            n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
         self.seed = seed
         self.task = task
         self.z_size = z_size
+        self.y_mult = y_mult
         self.z_norm_mult = z_norm_mult
         self.weight_decay = weight_decay
         self.lr = lr
@@ -122,14 +124,14 @@ class Model(pl.LightningModule):
         assert self.task == Task.TRAIN_VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + kl + self.z_norm_mult * z_norm
         return loss
 
     def validation_step(self, batch, batch_idx):
         assert self.task == Task.TRAIN_VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + kl + self.z_norm_mult * z_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_kl', kl, on_step=False, on_epoch=True)
