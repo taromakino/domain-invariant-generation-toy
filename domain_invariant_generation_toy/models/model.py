@@ -97,6 +97,8 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
+        self.vae_classifier = MLP(z_size, h_sizes, 1)
+        self.vae_params += list(self.vae_classifier.parameters())
         self.classifier = MLP(z_size, h_sizes, 1)
         self.z_c, self.y = [], []
         self.val_acc = Accuracy('binary')
@@ -116,11 +118,14 @@ class Model(pl.LightningModule):
         z_c, z_s = torch.chunk(z, 2, dim=1)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
+        # E_q(z_c|x,y,e)[log p(y|z_c)]
+        y_pred = self.vae_classifier(z_c.detach())
+        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         z_norm = (z ** 2).sum().mean()
-        return log_prob_x_z, kl, z_norm
+        return log_prob_x_z, log_prob_y_zc, kl, z_norm
 
     def classify(self, z_c, y):
         y_pred = self.classifier(z_c)
@@ -130,8 +135,8 @@ class Model(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.task == Task.TRAIN_VAE:
             x, y, e, c, s = batch
-            log_prob_x_z, kl, z_norm = self.train_vae(x, y, e)
-            loss = -log_prob_x_z + kl + self.z_norm_mult * z_norm
+            log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
+            loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
             return loss
         elif self.task == Task.CLASSIFY:
             z_c, y = batch
@@ -142,9 +147,10 @@ class Model(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         if self.task == Task.TRAIN_VAE:
             x, y, e, c, s = batch
-            log_prob_x_z, kl, z_norm = self.train_vae(x, y, e)
-            loss = -log_prob_x_z + kl + self.z_norm_mult * z_norm
+            log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
+            loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
@@ -162,8 +168,13 @@ class Model(pl.LightningModule):
 
     def inference_loss(self, x, z):
         log_prob_x_z = self.decoder(x, z).mean()
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        prob_y_pos_zc = torch.sigmoid(self.vae_classifier(z_c))
+        prob_y_neg_zc = 1 - prob_y_pos_zc
+        prob_y_zc = torch.hstack((prob_y_neg_zc, prob_y_pos_zc))
+        log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
         z_norm = (z ** 2).sum().mean()
-        return log_prob_x_z, z_norm
+        return log_prob_x_z, log_prob_y_zc, z_norm
 
     def infer_z(self, x):
         batch_size = len(x)
@@ -174,24 +185,26 @@ class Model(pl.LightningModule):
         optim_log_prob_x_z = optim_log_prob_y_zc = optim_z_norm = optim_z = None
         for _ in range(self.n_steps):
             optim.zero_grad()
-            log_prob_x_z, z_norm = self.inference_loss(x, z_param)
-            loss = -log_prob_x_z + self.z_norm_mult * z_norm
+            log_prob_x_z, log_prob_y_zc, z_norm = self.inference_loss(x, z_param)
+            loss = -log_prob_x_z - log_prob_y_zc + self.z_norm_mult * z_norm
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
                 optim_log_prob_x_z = log_prob_x_z
+                optim_log_prob_y_zc = log_prob_y_zc
                 optim_z_norm = z_norm
                 optim_z = z_param.clone()
         z_c, z_s = torch.chunk(optim_z, 2, dim=1)
-        return z_c, optim_log_prob_x_z, optim_z_norm, optim_loss
+        return z_c, optim_log_prob_x_z, optim_log_prob_y_zc, optim_z_norm, optim_loss
 
     def test_step(self, batch, batch_idx):
         if self.task == Task.INFER_Z_TRAIN or self.task == Task.INFER_Z_VAL or self.task == Task.INFER_Z_TEST:
             x, y, e, c, s = batch
             with torch.set_grad_enabled(True):
-                z_c, log_prob_x_z, z_norm, loss = self.infer_z(x)
+                z_c, log_prob_x_z, log_prob_y_zc, z_norm, loss = self.infer_z(x)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+                self.log('log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
                 self.log('z_norm', z_norm, on_step=False, on_epoch=True)
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.z_c.append(z_c.detach().cpu())
