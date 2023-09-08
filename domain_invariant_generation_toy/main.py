@@ -42,23 +42,11 @@ def main(args):
             args.z_norm_mult, args.weight_decay, args.lr, args.lr_inference, args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
-    elif args.task == Task.INFER_Z_TRAIN or args.task == Task.INFER_Z_VAL:
-        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
-        if args.task == Task.INFER_Z_TRAIN:
-            trainer.test(model, data_train)
-        elif args.task == Task.INFER_Z_VAL:
-            trainer.test(model, data_val)
     elif args.task == Task.TRAIN_CLASSIFIER:
-        zc_train, y_train = torch.load(os.path.join(args.dpath, Task.INFER_Z_TRAIN.value, f'version_{args.seed}', 'zy.pt'))
-        zc_val, y_val = torch.load(os.path.join(args.dpath, Task.INFER_Z_VAL.value, f'version_{args.seed}', 'zy.pt'))
-        infer_data_train = make_dataloader((zc_train, y_train), args.batch_size, True)
-        infer_data_val = make_dataloader((zc_val, y_val), args.batch_size, False)
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
-        trainer.fit(model, infer_data_train, infer_data_val)
+        trainer.fit(model, data_train, data_val)
     else:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_CLASSIFIER.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
