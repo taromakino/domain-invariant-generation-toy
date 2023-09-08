@@ -12,6 +12,23 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
+--task infer_z_train \
+--batch_size 2048
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task infer_z_val \
+--batch_size 2048
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task train_classifier
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
 --task inference \
 --batch_size 2048
 
