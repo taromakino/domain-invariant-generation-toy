@@ -36,8 +36,8 @@ class Encoder(nn.Module):
 class InferenceEncoder(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mu = MLP(x_size, h_sizes, z_size)
-        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
+        self.mu = MLP(x_size, h_sizes, 2 * z_size)
+        self.cov = MLP(x_size, h_sizes, size_to_n_tril(2 * z_size))
 
     def forward(self, x):
         return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_tril(self.cov(x)))
@@ -133,16 +133,23 @@ class Model(pl.LightningModule):
         return log_prob_x_z, log_prob_y_zc, kl
 
     def train_inference_encoder(self, x, y, e):
-        posterior_dist = self.encoder(x, y, e)
-        z = self.sample_z(posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
+        # z_c,z_s ~ q(z_c,z_s|x)
         inference_posterior_dist = self.inference_encoder(x)
-        log_prob_zc_x = inference_posterior_dist.log_prob(z_c).mean()
-        return log_prob_zc_x
+        z = self.sample_z(inference_posterior_dist)
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
+        log_prob_x_z = self.decoder(x, z).mean()
+        # E_q(z_c|x,y,e)[log p(y|z_c)]
+        y_pred = self.vae_classifier(z_c.detach())
+        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
+        posterior_dist = self.encoder(x, y, e)
+        kl = D.kl_divergence(posterior_dist, inference_posterior_dist).mean()
+        return log_prob_x_z, log_prob_y_zc, kl
 
     def inference(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
-        z_c = self.sample_z(inference_posterior_dist)
+        z = self.sample_z(inference_posterior_dist)
+        z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
@@ -154,8 +161,8 @@ class Model(pl.LightningModule):
             loss = -log_prob_x_z - log_prob_y_zc + kl
             return loss
         elif self.task == Task.INFERENCE_ENCODER:
-            log_prob_zc_x = self.train_inference_encoder(x, y, e)
-            loss = -log_prob_zc_x
+            log_prob_x_z, log_prob_y_zc, kl = self.train_inference_encoder(x, y, e)
+            loss = -log_prob_x_z - log_prob_y_zc + kl
             return loss
         elif self.task == Task.INFERENCE:
             y_pred, log_prob_y_zc = self.inference(x, y)
@@ -172,8 +179,11 @@ class Model(pl.LightningModule):
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.INFERENCE_ENCODER:
-            log_prob_zc_x = self.train_inference_encoder(x, y, e)
-            loss = -log_prob_zc_x
+            log_prob_x_z, log_prob_y_zc, kl = self.train_inference_encoder(x, y, e)
+            loss = -log_prob_x_z - log_prob_y_zc + kl
+            self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
+            self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         else:
             assert self.task == Task.INFERENCE
@@ -184,7 +194,7 @@ class Model(pl.LightningModule):
             self.val_acc.update(y_pred_class, y.long())
 
     def on_validation_epoch_end(self):
-        if self.task == Task.INFERENCE:
+        if self.task == Task.INFERENCE_ENCODER:
             self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
