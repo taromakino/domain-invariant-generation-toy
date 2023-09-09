@@ -72,16 +72,6 @@ class Prior(nn.Module):
         return D.MultivariateNormal(mu, cov)
 
 
-class ZCSampler(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes):
-        super().__init__()
-        self.mu = MLP(x_size, h_sizes, z_size)
-        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
-
-    def forward(self, x):
-        return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_tril(self.cov(x)))
-
-
 class Model(pl.LightningModule):
     def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr):
         super().__init__()
@@ -104,10 +94,9 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
-        self.vae_classifier = MLP(z_size, h_sizes, 1)
-        self.vae_params += list(self.vae_classifier.parameters())
-        self.zc_sampler = ZCSampler(x_size, z_size, h_sizes)
         self.classifier = MLP(z_size, h_sizes, 1)
+        self.vae_params += list(self.classifier.parameters())
+        self.feature_extractor = MLP(x_size, h_sizes, z_size)
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -126,7 +115,7 @@ class Model(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.vae_classifier(z_c.detach())
+        y_pred = self.classifier(z_c.detach())
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
@@ -134,39 +123,27 @@ class Model(pl.LightningModule):
         z_norm = (z ** 2).sum().mean()
         return log_prob_x_z, log_prob_y_zc, kl, z_norm
 
-    def train_zc_sampler(self, x, y):
-        dist_causal = self.zc_sampler(x)
-        z_c = self.sample_z(dist_causal)
-        y_pred = self.vae_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-        zc_norm = (z_c ** 2).sum().mean()
-        return log_prob_y_zc, zc_norm
-
-    def inference(self, x, y):
-        dist_causal = self.zc_sampler(x)
-        z_c = self.sample_z(dist_causal)
+    def classify(self, x, y):
+        z_c = self.feature_extractor(x)
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
     def training_step(self, batch, batch_idx):
         x, y, e, c, s = batch
-        if self.task == Task.TRAIN_VAE:
+        if self.task == Task.TRAIN:
             log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
             loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
             return loss
-        elif self.task == Task.TRAIN_ZC_SAMPLER:
-            log_prob_y_zc, zc_norm = self.train_zc_sampler(x, y)
-            loss = -log_prob_y_zc + self.z_norm_mult * zc_norm
-            return loss
-        elif self.task == Task.INFERENCE:
+        else:
+            assert self.task == Task.INFERENCE
             y_pred, log_prob_y_zc = self.inference(x, y)
             loss = -log_prob_y_zc
             return loss
 
     def validation_step(self, batch, batch_idx):
         x, y, e, c, s = batch
-        if self.task == Task.TRAIN_VAE:
+        if self.task == Task.TRAIN:
             log_prob_x_z, log_prob_y_zc, kl, z_norm = self.train_vae(x, y, e)
             loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
             self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
@@ -174,13 +151,8 @@ class Model(pl.LightningModule):
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task == Task.TRAIN_ZC_SAMPLER:
-            log_prob_y_zc, zc_norm = self.train_zc_sampler(x, y)
-            loss = -log_prob_y_zc + self.z_norm_mult * zc_norm
-            self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-            self.log('val_z_norm', zc_norm, on_step=False, on_epoch=True)
-            self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task == Task.INFERENCE:
+        else:
+            assert self.task == Task.INFERENCE
             y_pred, log_prob_y_zc = self.classifier(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
@@ -203,34 +175,21 @@ class Model(pl.LightningModule):
             self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
-        if self.task == Task.TRAIN_VAE:
+        if self.task == Task.TRAIN:
             for params in self.vae_params:
                 params.requires_grad = True
-            for params in self.zc_sampler.parameters():
-                params.requires_grad = False
-            for params in self.classifier.parameters():
-                params.requires_grad = False
-        elif self.task == Task.TRAIN_ZC_SAMPLER:
-            for params in self.vae_params:
-                params.requires_grad = False
-            for params in self.zc_sampler.parameters():
-                params.requires_grad = True
-            for params in self.classifier.parameters():
+            for params in self.feature_extractor.parameters():
                 params.requires_grad = False
         else:
             assert self.task == Task.INFERENCE
             for params in self.vae_params:
                 params.requires_grad = False
-            for params in self.zc_sampler.parameters():
-                params.requires_grad = False
-            for params in self.classifier.parameters():
+            for params in self.feature_extractor.parameters():
                 params.requires_grad = True
 
     def configure_optimizers(self):
-        if self.task == Task.TRAIN_VAE:
+        if self.task == Task.TRAIN:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task == Task.TRAIN_ZC_SAMPLER:
-            return Adam(self.zc_sampler.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         else:
             assert self.task == Task.INFERENCE
-            return Adam(self.classifier, lr=self.lr, weight_decay=self.weight_decay)
+            return Adam(self.feature_extractor, lr=self.lr, weight_decay=self.weight_decay)

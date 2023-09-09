@@ -29,20 +29,14 @@ def main(args):
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
-    elif args.task == Task.TRAIN_VAE:
-        model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes,
-            args.z_norm_mult, args.weight_decay, args.lr)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
-        trainer.fit(model, data_train, data_val)
-    elif args.task == Task.TRAIN_ZC_SAMPLER:
+    elif args.task == Task.TRAIN:
         model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes,
             args.z_norm_mult, args.weight_decay, args.lr)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
     else:
         assert args.task == Task.INFERENCE
-        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_ZC_SAMPLER.value, f'version_{args.seed}', 'checkpoints',
-            'best.ckpt')
+        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
