@@ -103,10 +103,9 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
-        self.vae_classifier = MLP(z_size, h_sizes, 1)
-        self.vae_params += list(self.vae_classifier.parameters())
-        self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes)
         self.classifier = MLP(z_size, h_sizes, 1)
+        self.vae_params += list(self.classifier.parameters())
+        self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes)
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -125,27 +124,26 @@ class Model(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.vae_classifier(z_c.detach())
+        y_pred = self.classifier(z_c.detach())
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         return log_prob_x_z, log_prob_y_zc, kl
 
-    def train_inference_encoder(self, x, y):
-        # z_c,z_s ~ q(z_c,z_s|x)
+    def train_inference_encoder(self, x, y, e):
+        posterior_dist = self.encoder(x, y, e)
+        z = self.sample_z(posterior_dist)
+        z_c, z_s = torch.chunk(z, 2, dim=1)
         inference_posterior_dist = self.inference_encoder(x)
-        z_c = self.sample_z(inference_posterior_dist)
-        y_pred = self.vae_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-        return y_pred, log_prob_y_zc
+        log_prob_zc_x = inference_posterior_dist.log_prob(z_c).mean()
+        return log_prob_zc_x
 
     def inference(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
         z_c = self.sample_z(inference_posterior_dist)
-        y_pred = self.vae_classifier(z_c)
-        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-        return y_pred, log_prob_y_zc
+        y_pred = self.classifier(z_c)
+        return y_pred
 
     def training_step(self, batch, batch_idx):
         x, y, e, c, s = batch
@@ -154,8 +152,8 @@ class Model(pl.LightningModule):
             loss = -log_prob_x_z - log_prob_y_zc + kl
             return loss
         elif self.task == Task.INFERENCE_ENCODER:
-            y_pred, log_prob_y_zc = self.train_inference_encoder(x, y)
-            loss = -log_prob_y_zc
+            log_prob_zc_x = self.train_inference_encoder(x, y, e)
+            loss = -log_prob_zc_x
             return loss
 
     def validation_step(self, batch, batch_idx):
@@ -168,22 +166,14 @@ class Model(pl.LightningModule):
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.INFERENCE_ENCODER:
-            y_pred, log_prob_y_zc = self.train_inference_encoder(x, y)
-            loss = -log_prob_y_zc
+            log_prob_zc_x = self.train_inference_encoder(x, y, e)
+            loss = -log_prob_zc_x
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-            y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
-            self.val_acc.update(y_pred_class, y.long())
-
-    def on_validation_epoch_end(self):
-        if self.task == Task.INFERENCE_ENCODER or self.task == Task.INFERENCE:
-            self.log('val_acc', self.val_acc.compute())
 
     def test_step(self, batch, batch_idx):
         assert self.task == Task.INFERENCE
         x, y, e, c, s = batch
-        y_pred, log_prob_y_zc = self.inference(x, y)
-        loss = -log_prob_y_zc
-        self.log('test_loss', loss, on_step=False, on_epoch=True)
+        y_pred = self.inference(x, y)
         y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
         self.test_acc.update(y_pred_class, y.long())
 
@@ -197,29 +187,20 @@ class Model(pl.LightningModule):
                 params.requires_grad = True
             for params in self.inference_encoder.parameters():
                 params.requires_grad = False
-            for params in self.classifier.parameters():
-                params.requires_grad = False
         elif self.task == Task.INFERENCE_ENCODER:
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.inference_encoder.parameters():
                 params.requires_grad = True
-            for params in self.classifier.parameters():
-                params.requires_grad = False
         else:
             assert self.task == Task.INFERENCE
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.inference_encoder.parameters():
                 params.requires_grad = False
-            for params in self.classifier.parameters():
-                params.requires_grad = True
 
     def configure_optimizers(self):
         if self.task == Task.VAE:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
         elif self.task == Task.INFERENCE_ENCODER:
             return Adam(self.inference_encoder.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        else:
-            assert self.task == Task.INFERENCE
-            return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)
