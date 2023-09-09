@@ -6,8 +6,13 @@ export DPATH=$RESULTS_DPATH/$DATASET
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task train \
+--task train_vae \
 --z_norm_mult 0.001
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task train_zc_sampler
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
