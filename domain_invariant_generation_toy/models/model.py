@@ -137,7 +137,7 @@ class Model(pl.LightningModule):
             return loss
         else:
             assert self.task == Task.INFERENCE
-            y_pred, log_prob_y_zc = self.inference(x, y)
+            y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             return loss
 
@@ -153,7 +153,7 @@ class Model(pl.LightningModule):
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         else:
             assert self.task == Task.INFERENCE
-            y_pred, log_prob_y_zc = self.classifier(x, y)
+            y_pred, log_prob_y_zc = self.classify(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
@@ -166,7 +166,7 @@ class Model(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         assert self.task == Task.INFERENCE
         x, y, e, c, s = batch
-        y_pred, log_prob_y_zc = self.classifier(x, y)
+        y_pred, log_prob_y_zc = self.classify(x, y)
         y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
         self.test_acc.update(y_pred_class, y.long())
 
