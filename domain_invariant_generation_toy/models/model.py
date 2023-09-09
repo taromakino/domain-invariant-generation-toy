@@ -72,6 +72,16 @@ class Prior(nn.Module):
         return D.MultivariateNormal(mu, cov)
 
 
+class FeatureExtractor(nn.Module):
+    def __init__(self, x_size, z_size, h_sizes):
+        super().__init__()
+        self.mu = MLP(x_size, h_sizes, z_size)
+        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
+
+    def forward(self, x):
+        return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_tril(self.cov(x)))
+
+
 class Model(pl.LightningModule):
     def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, z_norm_mult, weight_decay, lr):
         super().__init__()
@@ -96,7 +106,7 @@ class Model(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         self.vae_params += list(self.classifier.parameters())
-        self.feature_extractor = MLP(x_size, h_sizes, z_size)
+        self.feature_extractor = FeatureExtractor(x_size, z_size, h_sizes)
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -124,7 +134,8 @@ class Model(pl.LightningModule):
         return log_prob_x_z, log_prob_y_zc, kl, z_norm
 
     def classify(self, x, y):
-        z_c = self.feature_extractor(x)
+        zc_dist = self.feature_extractor(x)
+        z_c = self.sample_z(zc_dist)
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
