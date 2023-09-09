@@ -72,18 +72,14 @@ class Prior(nn.Module):
         return D.MultivariateNormal(mu, cov)
 
 
-class ZSampler(nn.Module):
+class ZCSampler(nn.Module):
     def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mu_causal = MLP(x_size, h_sizes, z_size)
-        self.cov_causal = MLP(x_size, h_sizes, size_to_n_tril(z_size))
-        self.mu_spurious = MLP(x_size, h_sizes, z_size)
-        self.cov_spurious = MLP(x_size, h_sizes, size_to_n_tril(z_size))
+        self.mu = MLP(x_size, h_sizes, z_size)
+        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
 
     def forward(self, x):
-        dist_causal = D.MultivariateNormal(self.mu_causal(x), scale_tril=arr_to_tril(self.cov_causal(x)))
-        dist_spurious = D.MultivariateNormal(self.mu_spurious(x), scale_tril=arr_to_tril(self.cov_spurious(x)))
-        return dist_causal, dist_spurious
+        return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_tril(self.cov(x)))
 
 
 class Model(pl.LightningModule):
@@ -112,8 +108,8 @@ class Model(pl.LightningModule):
         self.train_params += list(self.elbo_classifier.parameters())
         self.classifier = MLP(z_size, h_sizes, 1)
         self.inference_params += list(self.classifier.parameters())
-        self.z_sampler = ZSampler(x_size, z_size, h_sizes)
-        self.inference_params += list(self.z_sampler.parameters())
+        self.zc_sampler = ZCSampler(x_size, z_size, h_sizes)
+        self.inference_params += list(self.zc_sampler.parameters())
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -141,15 +137,12 @@ class Model(pl.LightningModule):
         return log_prob_x_z, log_prob_y_zc, kl, z_norm
 
     def classify(self, x, y):
-        dist_causal, dist_spurious = self.z_sampler(x)
+        dist_causal = self.zc_sampler(x)
         z_c = self.sample_z(dist_causal)
-        z_s = self.sample_z(dist_spurious)
-        z = torch.hstack((z_c, z_s))
-        log_prob_x_z = self.decoder(x, z).mean()
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
-        z_norm = (z ** 2).sum().mean()
-        return y_pred, log_prob_x_z, log_prob_y_zc, z_norm
+        zc_norm = (z_c ** 2).sum().mean()
+        return y_pred, log_prob_y_zc, zc_norm
 
     def training_step(self, batch, batch_idx):
         x, y, e, c, s = batch
@@ -158,8 +151,8 @@ class Model(pl.LightningModule):
             loss = -log_prob_x_z - log_prob_y_zc + kl + self.z_norm_mult * z_norm
             return loss
         elif self.task == Task.INFERENCE:
-            y_pred, log_prob_x_z, log_prob_y_zc, z_norm = self.classify(x, y)
-            loss = -log_prob_x_z - log_prob_y_zc + self.z_norm_mult * z_norm
+            y_pred, log_prob_y_zc, z_norm = self.classify(x, y)
+            loss = -log_prob_y_zc + self.z_norm_mult * z_norm
             return loss
 
     def validation_step(self, batch, batch_idx):
@@ -173,9 +166,8 @@ class Model(pl.LightningModule):
             self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.INFERENCE:
-            y_pred, log_prob_x_z, log_prob_y_zc, z_norm = self.classify(x, y)
-            loss = -log_prob_x_z - log_prob_y_zc + self.z_norm_mult * z_norm
-            self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
+            y_pred, log_prob_y_zc, z_norm = self.classify(x, y)
+            loss = -log_prob_y_zc + self.z_norm_mult * z_norm
             self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
             self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
@@ -189,8 +181,8 @@ class Model(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         assert self.task == Task.INFERENCE
         x, y, e, c, s = batch
-        y_pred, log_prob_x_z, log_prob_y_zc, z_norm = self.classify(x, y)
-        loss = -log_prob_x_z - log_prob_y_zc + self.z_norm_mult * z_norm
+        y_pred, log_prob_y_zc, z_norm = self.classify(x, y)
+        loss = -log_prob_y_zc + self.z_norm_mult * z_norm
         self.log('val_loss', loss, on_step=False, on_epoch=True)
         y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
         self.test_acc.update(y_pred_class, y.long())
