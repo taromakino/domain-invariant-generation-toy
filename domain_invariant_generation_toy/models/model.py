@@ -192,4 +192,4 @@ class Model(pl.LightningModule):
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
         else:
             assert self.task == Task.INFERENCE
-            return Adam(self.feature_extractor, lr=self.lr, weight_decay=self.weight_decay)
+            return Adam(self.feature_extractor.parameters(), lr=self.lr, weight_decay=self.weight_decay)
