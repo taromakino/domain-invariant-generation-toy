@@ -19,7 +19,7 @@ def sample_prior(rng, model, y, e):
 
 def main(args):
     rng = np.random.RandomState(args.seed)
-    task_dpath = os.path.join(args.dpath, Task.TRAIN.value)
+    task_dpath = os.path.join(args.dpath, Task.TRAIN_VAE.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, data_val, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
