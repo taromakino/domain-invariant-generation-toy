@@ -143,7 +143,7 @@ class Model(pl.LightningModule):
     def inference(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
         z_c = self.sample_z(inference_posterior_dist)
-        y_pred = self.classifier(z_c)
+        y_pred = self.vae_classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
 
@@ -155,10 +155,6 @@ class Model(pl.LightningModule):
             return loss
         elif self.task == Task.INFERENCE_ENCODER:
             y_pred, log_prob_y_zc = self.train_inference_encoder(x, y)
-            loss = -log_prob_y_zc
-            return loss
-        elif self.task == Task.INFERENCE:
-            y_pred, log_prob_y_zc = self.inference(x, y)
             loss = -log_prob_y_zc
             return loss
 
@@ -173,13 +169,6 @@ class Model(pl.LightningModule):
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         elif self.task == Task.INFERENCE_ENCODER:
             y_pred, log_prob_y_zc = self.train_inference_encoder(x, y)
-            loss = -log_prob_y_zc
-            self.log('val_loss', loss, on_step=False, on_epoch=True)
-            y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
-            self.val_acc.update(y_pred_class, y.long())
-        else:
-            assert self.task == Task.INFERENCE
-            y_pred, log_prob_y_zc = self.inference(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             y_pred_class = (torch.sigmoid(y_pred) > 0.5).long()
