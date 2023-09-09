@@ -1,5 +1,6 @@
 import os
 import pytorch_lightning as pl
+import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, X_SIZE
 from models.erm import ERM
@@ -8,15 +9,22 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task
 from utils.file import save_file
+from utils.nn_utils import make_dataloader
 
 
-def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio):
-    return pl.Trainer(
-        logger=CSVLogger(task_dpath, name='', version=seed),
-        callbacks=[
-            EarlyStopping(monitor='val_loss', patience=int(early_stop_ratio * n_epochs)),
-            ModelCheckpoint(monitor='val_loss', filename='best')],
-        max_epochs=n_epochs)
+def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
+    if is_train:
+        return pl.Trainer(
+            logger=CSVLogger(task_dpath, name='', version=seed),
+            callbacks=[
+                EarlyStopping(monitor='val_loss', patience=int(early_stop_ratio * n_epochs)),
+                ModelCheckpoint(monitor='val_loss', filename='best')],
+            max_epochs=n_epochs)
+    else:
+        return pl.Trainer(
+            logger=CSVLogger(task_dpath, name='', version=seed),
+            max_epochs=1,
+            inference_mode=False)
 
 
 def main(args):
@@ -26,20 +34,23 @@ def main(args):
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
-    elif args.task == Task.TRAIN:
+    elif args.task == Task.TRAIN_VAE:
         model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes,
-            args.z_norm_mult, args.weight_decay, args.lr)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
+            args.z_norm_mult, args.weight_decay, args.lr, args.lr_inference, args.n_steps)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
+        trainer.fit(model, data_train, data_val)
+    elif args.task == Task.TRAIN_CLASSIFIER:
+        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
+        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
     else:
-        assert args.task == Task.INFERENCE
-        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
+        ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_CLASSIFIER.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
-        trainer.fit(model, data_train, data_val)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
         trainer.test(model, data_test)
 
 
@@ -57,6 +68,8 @@ if __name__ == '__main__':
     parser.add_argument('--z_norm_mult', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--lr_inference', type=float, default=0.01)
+    parser.add_argument('--n_steps', type=int, default=5000)
     parser.add_argument('--n_epochs', type=int, default=500)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     main(parser.parse_args())
