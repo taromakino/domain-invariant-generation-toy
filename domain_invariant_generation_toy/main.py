@@ -1,6 +1,5 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, X_SIZE
 from models.erm import ERM
@@ -9,7 +8,6 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task
 from utils.file import save_file
-from utils.nn_utils import make_dataloader
 
 
 def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
@@ -38,8 +36,8 @@ def main(args):
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.TRAIN_VAE:
-        model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes,
-            args.weight_decay, args.lr, args.lr_inference, args.n_steps)
+        model = Model(args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.weight_decay, args.lr,
+            args.lr_inference, args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.TRAIN_CLASSIFIER:
@@ -49,7 +47,7 @@ def main(args):
         trainer.fit(model, data_train, data_val)
     else:
         ckpt_fpath = os.path.join(args.dpath, Task.TRAIN_CLASSIFIER.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
+        model = Model.load_from_checkpoint(ckpt_fpath, task=args.task, lr_inference=args.lr_inference, n_steps=args.n_steps)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
         trainer.test(model, data_test)
 

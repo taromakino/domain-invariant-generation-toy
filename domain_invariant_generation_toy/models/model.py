@@ -73,11 +73,9 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, task, x_size, z_size, h_sizes, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
-        self.dpath = dpath
-        self.seed = seed
         self.task = task
         self.z_size = z_size
         self.weight_decay = weight_decay
