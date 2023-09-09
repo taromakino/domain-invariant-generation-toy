@@ -6,8 +6,7 @@ export DPATH=$RESULTS_DPATH/$DATASET
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task train_vae \
---z_norm_mult 0.001
+--task train_vae
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \

@@ -98,7 +98,6 @@ class Model(pl.LightningModule):
         self.vae_classifier = MLP(z_size, h_sizes, 1)
         self.vae_params += list(self.vae_classifier.parameters())
         self.classifier = MLP(z_size, h_sizes, 1)
-        self.z_c, self.y = [], []
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
