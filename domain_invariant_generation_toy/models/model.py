@@ -142,8 +142,7 @@ class Model(pl.LightningModule):
 
     def inference(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
-        z = self.sample_z(inference_posterior_dist)
-        z_c, z_s = torch.chunk(z, 2, dim=1)
+        z_c = self.sample_z(inference_posterior_dist)
         y_pred = self.classifier(z_c)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y)
         return y_pred, log_prob_y_zc
