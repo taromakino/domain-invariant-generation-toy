@@ -175,7 +175,8 @@ class Model(pl.LightningModule):
             log_prob_zc_x = self.train_inference_encoder(x, y, e)
             loss = -log_prob_zc_x
             self.log('val_loss', loss, on_step=False, on_epoch=True)
-        elif self.task == Task.INFERENCE:
+        else:
+            assert self.task == Task.INFERENCE
             y_pred, log_prob_y_zc = self.inference(x, y)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)

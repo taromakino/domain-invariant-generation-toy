@@ -10,19 +10,13 @@ from utils.enums import Task
 from utils.file import save_file
 
 
-def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
-    if is_train:
-        return pl.Trainer(
-            logger=CSVLogger(task_dpath, name='', version=seed),
-            callbacks=[
-                EarlyStopping(monitor='val_loss', patience=int(early_stop_ratio * n_epochs)),
-                ModelCheckpoint(monitor='val_loss', filename='best')],
-            max_epochs=n_epochs)
-    else:
-        return pl.Trainer(
-            logger=CSVLogger(task_dpath, name='', version=seed),
-            max_epochs=1,
-            inference_mode=False)
+def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio):
+    return pl.Trainer(
+        logger=CSVLogger(task_dpath, name='', version=seed),
+        callbacks=[
+            EarlyStopping(monitor='val_loss', patience=int(early_stop_ratio * n_epochs)),
+            ModelCheckpoint(monitor='val_loss', filename='best')],
+        max_epochs=n_epochs)
 
 
 def main(args):
@@ -32,23 +26,23 @@ def main(args):
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.VAE:
         model = Model(args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.weight_decay, args.lr,
             args.lr_inference, args.n_steps)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.INFERENCE_ENCODER:
         ckpt_fpath = os.path.join(args.dpath, Task.VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, dpath=task_dpath, task=args.task)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
     else:
         ckpt_fpath = os.path.join(args.dpath, Task.INFERENCE_ENCODER.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, task=args.task, lr_inference=args.lr_inference, n_steps=args.n_steps)
-        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, False)
+        trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
 
