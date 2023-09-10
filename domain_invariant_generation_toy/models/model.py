@@ -34,13 +34,21 @@ class Encoder(nn.Module):
 
 
 class InferenceEncoder(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes):
+    def __init__(self, x_size, z_size, h_sizes, n_components):
         super().__init__()
-        self.mu = MLP(x_size, h_sizes, z_size)
-        self.cov = MLP(x_size, h_sizes, size_to_n_tril(z_size))
+        self.z_size = z_size
+        self.n_components = n_components
+        self.logits = MLP(x_size, h_sizes, n_components)
+        self.mu = MLP(x_size, h_sizes, n_components * z_size)
+        self.sd = MLP(x_size, h_sizes, n_components * z_size)
 
     def forward(self, x):
-        return D.MultivariateNormal(self.mu(x), scale_tril=arr_to_tril(self.cov(x)))
+        batch_size = len(x)
+        mu = self.mu(x).reshape(batch_size, self.n_components, self.z_size)
+        sd = F.softplus(self.sd(x).reshape(batch_size, self.n_components, self.z_size))
+        mixture_dist = D.Categorical(logits=self.logits(x))
+        components_dist = D.Independent(D.Normal(mu, sd), 1)
+        return D.MixtureSameFamily(mixture_dist, components_dist)
 
 
 class Decoder(nn.Module):
@@ -83,15 +91,13 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, h_sizes, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, task, x_size, z_size, h_sizes, n_components, weight_decay, lr):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
         self.weight_decay = weight_decay
         self.lr = lr
-        self.lr_inference = lr_inference
-        self.n_steps = n_steps
         self.vae_params = []
         # q(z_c|x,y,e)
         self.encoder = Encoder(x_size, z_size, h_sizes)
@@ -105,7 +111,7 @@ class Model(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         self.vae_params += list(self.classifier.parameters())
-        self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes)
+        self.inference_encoder = InferenceEncoder(x_size, z_size, h_sizes, n_components)
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
         self.configure_grad()
@@ -141,7 +147,7 @@ class Model(pl.LightningModule):
 
     def inference(self, x, y):
         inference_posterior_dist = self.inference_encoder(x)
-        z_c = self.sample_z(inference_posterior_dist)
+        z_c = inference_posterior_dist.sample()
         y_pred = self.classifier(z_c)
         return y_pred
 
