@@ -56,10 +56,10 @@ def make_trainval_data():
     x = x.reshape(len(x), -1)
 
     x = torch.tensor(x, dtype=torch.float32)
-    y = torch.tensor(y, dtype=torch.float32)[:, None]
-    e = torch.tensor(e, dtype=torch.float32)[:, None]
-    c = torch.tensor(width, dtype=torch.float32)[:, None]
-    s = torch.tensor(brightness, dtype=torch.float32)[:, None]
+    y = torch.tensor(y, dtype=torch.long)
+    e = torch.tensor(e, dtype=torch.long)
+    c = torch.tensor(width, dtype=torch.float32)
+    s = torch.tensor(brightness, dtype=torch.float32)
     return x, y, e, c, s
 
 
@@ -97,10 +97,10 @@ def make_test_data(batch_size):
     x = x.reshape(len(x), -1)
 
     x = torch.tensor(x, dtype=torch.float32)
-    y = torch.tensor(y, dtype=torch.float32)[:, None]
+    y = torch.tensor(y, dtype=torch.long)
     e = torch.full_like(y, np.nan)
-    c = torch.tensor(width, dtype=torch.float32)[:, None]
-    s = torch.tensor(brightness, dtype=torch.float32)[:, None]
+    c = torch.tensor(width, dtype=torch.float32)
+    s = torch.tensor(brightness, dtype=torch.float32)
     return make_dataloader((x, y, e, c, s), batch_size, False)
 
 

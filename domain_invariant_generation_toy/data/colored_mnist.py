@@ -32,7 +32,7 @@ def make_trainval_data():
     idxs_env0 = np.concatenate(idxs_env0)
     idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
 
-    e = torch.zeros(n_total)
+    e = torch.zeros(n_total, dtype=torch.long)
     e[idxs_env1] = 1
 
     y = flip_binary(digits.clone(), 0.25)
@@ -54,10 +54,10 @@ def make_trainval_data():
     images[:, 1, :, :] *= (1 - colors)
     x = images.flatten(start_dim=1)
 
-    y = y[:, None].float()
-    e = e[:, None]
-    c = digits[:, None].float()
-    s = torch.tensor(colors.squeeze())[:, None].float()
+    y = y.long()
+    e = e
+    c = digits.float()
+    s = torch.tensor(colors.squeeze()).float()
     return x, y, e, c, s
 
 
@@ -82,10 +82,10 @@ def make_test_data(batch_size):
     images[:, 1, :, :] *= (1 - colors)
     x = images.flatten(start_dim=1)
 
-    y = y[:, None].float()
-    e = torch.full_like(y, np.nan)
-    c = digits[:, None].float()
-    s = torch.tensor(colors.squeeze())[:, None].float()
+    y = y.long()
+    e = torch.full_like(y, np.nan, dtype=torch.float32)
+    c = digits.float()
+    s = torch.tensor(colors.squeeze()).float()
     return make_dataloader((x, y, e, c, s), batch_size, False)
 
 
