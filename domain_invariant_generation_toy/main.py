@@ -62,6 +62,7 @@ def main(args):
         trainer.test(model, data_inference)
     else:
         assert args.task == Task.CLASSIFY
+        task_dpath = os.path.join(args.dpath, args.task.value, 'spurious' if args.is_spurious else 'causal')
         data_train = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, InferenceStage.TRAIN.value,
             f'version_{args.seed}', 'z.pt')), args.batch_size, True)
         data_val = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, InferenceStage.VAL.value,
@@ -69,7 +70,7 @@ def main(args):
         data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, InferenceStage.VAL.value,
             f'version_{args.seed}', 'z.pt')), args.batch_size, False)
         ckpt_fpath = os.path.join(args.dpath, Task.AGG_POSTERIOR.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
-        model = Model.load_from_checkpoint(ckpt_fpath, task=args.task)
+        model = Model.load_from_checkpoint(ckpt_fpath, task=args.task, is_spurious=args.is_spurious)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test)
