@@ -47,3 +47,9 @@ python $CODE_DPATH/main.py \
 
 python $CODE_DPATH/generate_sample_prior.py \
 --dpath $DPATH
+
+python $CODE_DPATH/generate_sample_q.py \
+--dpath $DPATH
+
+python $CODE_DPATH/generate_e_invariant.py \
+--dpath $DPATH

@@ -98,7 +98,7 @@ def make_test_data(batch_size):
 
     x = torch.tensor(x, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.long)
-    e = torch.full_like(y, np.nan)
+    e = torch.full_like(y, np.nan, dtype=torch.float32)
     c = torch.tensor(width, dtype=torch.float32)
     s = torch.tensor(brightness, dtype=torch.float32)
     return make_dataloader((x, y, e, c, s), batch_size, False)
