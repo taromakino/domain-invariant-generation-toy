@@ -121,7 +121,7 @@ class Model(pl.LightningModule):
         self.spurious_classifier = MLP(2 * z_size, h_sizes, 1)
         self.val_acc = Accuracy('binary')
         self.test_acc = Accuracy('binary')
-        self.z, self.y = [], []
+        self.z, self.y, self.x = [], [], []
         self.configure_grad()
 
     def sample_z(self, dist):
@@ -255,6 +255,7 @@ class Model(pl.LightningModule):
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.z.append(z.detach().cpu())
                 self.y.append(y.cpu())
+                self.x.append(x.cpu())
         else:
             assert self.task == Task.CLASSIFY
             z, y = batch
@@ -263,8 +264,8 @@ class Model(pl.LightningModule):
 
     def on_test_epoch_end(self):
         if self.task == Task.INFER_Z:
-            z, y = torch.cat(self.z), torch.cat(self.y)
-            torch.save((z, y), os.path.join(self.dpath, f'version_{self.seed}', 'z.pt'))
+            z, y, x = torch.cat(self.z), torch.cat(self.y), torch.cat(self.x)
+            torch.save((z, y, x), os.path.join(self.dpath, f'version_{self.seed}', 'z.pt'))
         else:
             assert self.task == Task.CLASSIFY
             self.log('test_acc', self.test_acc.compute())

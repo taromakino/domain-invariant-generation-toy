@@ -8,6 +8,7 @@ from models.model import Model
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task, InferenceStage
+from utils.file import save_file
 from utils.nn_utils import make_dataloader
 
 
@@ -28,25 +29,31 @@ def make_trainer(task_dpath, seed, n_epochs, early_stop_ratio, is_train):
 
 def main(args):
     pl.seed_everything(args.seed)
-    task_dpath = os.path.join(args.dpath, args.task.value)
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
+        task_dpath = os.path.join(args.dpath, args.task.value)
+        save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.VAE:
+        task_dpath = os.path.join(args.dpath, args.task.value)
+        save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
         model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.n_components,
             args.weight_decay, args.lr, args.lr_inference, args.n_steps, args.is_spurious)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.AGG_POSTERIOR:
+        task_dpath = os.path.join(args.dpath, args.task.value)
+        save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
         ckpt_fpath = os.path.join(args.dpath, Task.VAE.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
         model = Model.load_from_checkpoint(ckpt_fpath, task=args.task)
         trainer = make_trainer(task_dpath, args.seed, args.n_epochs, args.early_stop_ratio, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.INFER_Z:
         task_dpath = os.path.join(args.dpath, args.task.value, args.inference_stage.value)
+        save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
         if args.inference_stage == InferenceStage.TRAIN:
             data_inference = data_train
         elif args.inference_stage == InferenceStage.VAL:
@@ -61,6 +68,7 @@ def main(args):
     else:
         assert args.task == Task.CLASSIFY
         task_dpath = os.path.join(args.dpath, args.task.value, 'spurious' if args.is_spurious else 'causal')
+        save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
         data_train = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, InferenceStage.TRAIN.value,
             f'version_{args.seed}', 'z.pt')), args.batch_size, True)
         data_val = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, InferenceStage.VAL.value,
