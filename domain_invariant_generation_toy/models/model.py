@@ -267,7 +267,7 @@ class Model(pl.LightningModule):
             torch.save((z, y), os.path.join(self.dpath, f'version_{self.seed}', 'z.pt'))
         else:
             assert self.task == Task.CLASSIFY
-            self.log('acc', self.test_acc.compute())
+            self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
         if self.task == Task.VAE:
