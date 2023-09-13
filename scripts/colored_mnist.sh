@@ -17,33 +17,12 @@ python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
 --task infer_z \
---inference_stage train \
---batch_size 2048
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z \
---inference_stage val \
---batch_size 2048
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task infer_z \
---inference_stage test \
 --batch_size 2048
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
 --task classify
-
-python $CODE_DPATH/main.py \
---dataset $DATASET \
---dpath $DPATH \
---task classify \
---is_spurious
 
 python $CODE_DPATH/generate_sample_prior.py \
 --dpath $DPATH

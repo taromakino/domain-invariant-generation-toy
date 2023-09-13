@@ -7,7 +7,7 @@ from models.erm import ERM
 from models.model import Model
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
-from utils.enums import Task, InferenceStage
+from utils.enums import Task
 from utils.file import save_file
 from utils.nn_utils import make_dataloader
 
