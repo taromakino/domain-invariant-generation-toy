@@ -11,7 +11,7 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task agg_posterior
+--task q_z
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \

@@ -9,8 +9,3 @@ class Task(Enum):
     Q_Z = 'q_z'
     INFER_Z = 'infer_z'
     CLASSIFY = 'classify'
-
-class InferenceStage(Enum):
-    TRAIN = 'train'
-    VAL = 'val'
-    TEST = 'test'
