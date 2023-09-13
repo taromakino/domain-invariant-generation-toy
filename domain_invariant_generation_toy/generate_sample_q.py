@@ -44,7 +44,7 @@ def main(args):
             plot(axes[1, col_idx], x_pred_spurious.reshape(image_size).detach().cpu().numpy())
         fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'generate_sample_q')
         os.makedirs(fig_dpath, exist_ok=True)
-        plt.savefig(os.path.join(fig_dpath, f'{example_idx}.pdf'))
+        plt.savefig(os.path.join(fig_dpath, f'{example_idx}.png'))
         plt.close()
 
 
