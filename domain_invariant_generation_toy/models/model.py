@@ -70,14 +70,13 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, beta, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.dpath = dpath
         self.seed = seed
         self.task = task
         self.z_size = z_size
-        self.beta = beta
         self.weight_decay = weight_decay
         self.lr = lr
         self.lr_inference = lr_inference
@@ -134,14 +133,14 @@ class Model(pl.LightningModule):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl = self.train_vae(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + self.beta * kl
+        loss = -log_prob_x_z - log_prob_y_zc + kl
         return loss
 
     def validation_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl = self.train_vae(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + self.beta * kl
+        loss = -log_prob_x_z - log_prob_y_zc + kl
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_kl', kl, on_step=False, on_epoch=True)

@@ -21,18 +21,18 @@ class ERM(pl.LightningModule):
         self.configure_grad()
 
     def classify_y_c(self, c, y):
-        y_pred = self.classifier_y_c(c)
-        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y)
+        y_pred = self.classifier_y_c(c[:, None]).view(-1)
+        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y.float())
         return y_pred, log_prob_y_x
 
     def classify_y_s(self, s, y):
-        y_pred = self.classifier_y_s(s)
-        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y)
+        y_pred = self.classifier_y_s(s[:, None]).view(-1)
+        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y.float())
         return y_pred, log_prob_y_x
 
     def classify_y_x(self, x, y):
-        y_pred = self.classifier_y_x(x)
-        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y)
+        y_pred = self.classifier_y_x(x).view(-1)
+        log_prob_y_x = -F.binary_cross_entropy_with_logits(y_pred, y.float())
         return y_pred, log_prob_y_x
 
     def training_step(self, batch, batch_idx):
