@@ -145,9 +145,9 @@ class Model(pl.LightningModule):
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         return log_prob_x_z, log_prob_y_zc, kl
 
-    def train_aggregated_posterior(self, y, e):
-        prior_dist = self.prior(y, e)
-        z = self.sample_z(prior_dist)
+    def train_aggregated_posterior(self, x, y, e):
+        posterior_dist = self.encoder(x, y, e)
+        z = self.sample_z(posterior_dist)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         log_prob_zc = self.q_causal().log_prob(z_c).mean()
         log_prob_zs = self.q_spurious().log_prob(z_s).mean()
@@ -171,7 +171,7 @@ class Model(pl.LightningModule):
             return loss
         elif self.task == Task.AGG_POSTERIOR:
             x, y, e, c, s = batch
-            log_prob_z = self.train_aggregated_posterior(y, e)
+            log_prob_z = self.train_aggregated_posterior(x, y, e)
             loss = -log_prob_z
             return loss
         elif self.task == Task.CLASSIFY:

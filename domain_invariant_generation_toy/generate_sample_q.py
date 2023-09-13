@@ -18,9 +18,9 @@ def main(args):
     q_causal = model.q_causal()
     q_spurious = model.q_spurious()
     x, y, e, _, _ = data_train.dataset[:]
-    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
+        x_seed, y_seed, e_seed = x_seed.to(model.device), y_seed.to(model.device), e_seed.to(model.device)
         posterior_dist_seed = model.encoder(x_seed, y_seed, e_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
