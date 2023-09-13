@@ -12,7 +12,7 @@ from utils.file import load_file
 
 def main(args):
     rng = np.random.RandomState(args.seed)
-    task_dpath = os.path.join(args.dpath, Task.AGG_POSTERIOR.value)
+    task_dpath = os.path.join(args.dpath, Task.Q_Z.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
