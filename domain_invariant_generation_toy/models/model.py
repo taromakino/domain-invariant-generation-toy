@@ -92,8 +92,8 @@ class Model(pl.LightningModule):
         self.prior = Prior(z_size)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
-        self.vae_classifier = MLP(z_size, h_sizes, 1)
-        self.vae_params += list(self.vae_classifier.parameters())
+        self.classifier = MLP(z_size, h_sizes, 1)
+        self.vae_params += list(self.classifier.parameters())
         # q(z)
         self.q_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan))
         self.q_var = nn.Parameter(torch.full((2 * z_size,), torch.nan))
@@ -122,20 +122,12 @@ class Model(pl.LightningModule):
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x,y,e)[log p(y|z_c)]
-        y_pred = self.vae_classifier(z_c.detach()).view(-1)
+        y_pred = self.classifier(z_c.detach()).view(-1)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float())
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         return log_prob_x_z, log_prob_y_zc, kl
-
-    def classify(self, z, y):
-        if self.is_spurious:
-            y_pred = self.spurious_classifier(z).view(-1)
-        else:
-            z_c, z_s = torch.chunk(z, 2, dim=1)
-            y_pred = self.causal_classifier(z_c).view(-1)
-        return y_pred
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
@@ -199,7 +191,8 @@ class Model(pl.LightningModule):
         else:
             assert self.task == Task.CLASSIFY
             z, y, x = batch
-            y_pred = self.classify(z, y)
+            z_c, z_s = torch.chunk(z, 2, dim=1)
+            y_pred = self.classifier(z_c)
             self.test_acc.update(y_pred, y.long())
 
     def on_test_epoch_end(self):
