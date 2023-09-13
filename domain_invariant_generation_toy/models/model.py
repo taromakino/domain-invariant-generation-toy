@@ -192,7 +192,7 @@ class Model(pl.LightningModule):
             assert self.task == Task.CLASSIFY
             z, y, x = batch
             z_c, z_s = torch.chunk(z, 2, dim=1)
-            y_pred = self.classifier(z_c)
+            y_pred = self.classifier(z_c).view(-1)
             self.test_acc.update(y_pred, y.long())
 
     def on_test_epoch_end(self):
