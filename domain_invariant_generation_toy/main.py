@@ -37,8 +37,8 @@ def main(args):
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.VAE:
-        model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.z_norm_mult,
-            args.weight_decay, args.lr, args.lr_inference, args.n_steps)
+        model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.reg_mult,
+                      args.weight_decay, args.lr, args.lr_inference, args.n_steps)
         trainer = make_trainer(task_dpath, args.n_epochs, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.Q_Z:
