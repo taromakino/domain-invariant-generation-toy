@@ -2,13 +2,13 @@ export CODE_DPATH=/home/makinot1/git/domain-invariant-generation-toy/domain_inva
 
 export REG_MULT=0.001
 export DATASET=colored_mnist
-export DPATH=$RESULTS_DPATH/$DATASET/reg_mult=REG_MULT
+export DPATH=$RESULTS_DPATH/$DATASET/reg_mult=$REG_MULT
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
 --task vae \
---reg_mult REG_MULT
+--reg_mult $REG_MULT
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
