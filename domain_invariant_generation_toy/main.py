@@ -52,7 +52,7 @@ def main(args):
     else:
         assert args.task == Task.CLASSIFY_TEST
         model = Model.load_from_checkpoint(ckpt_fpath(Task.CLASSIFY_TRAIN), task=args.task)
-        trainer = make_trainer(task_dpath, 1, True)
+        trainer = make_trainer(task_dpath, 1, False)
         trainer.test(model, data_train)
 
 
