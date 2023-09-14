@@ -128,7 +128,7 @@ class Model(pl.LightningModule):
         # KL(q(z_c,z_s|x,y,e) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        z_norm = (z ** 2).sum(dim=1)
+        z_norm = (z ** 2).mean()
         return log_prob_x_z, log_prob_y_zc, kl, z_norm
 
     def training_step(self, batch, batch_idx):
@@ -152,7 +152,7 @@ class Model(pl.LightningModule):
     def e_invariant_loss(self, x, z, q):
         log_prob_x_z = self.decoder(x, z).mean()
         log_prob_z = q.log_prob(z).mean()
-        z_norm = (z ** 2).sum(dim=1)
+        z_norm = (z ** 2).mean()
         return log_prob_x_z, log_prob_z, z_norm
 
     def infer_z(self, x):
