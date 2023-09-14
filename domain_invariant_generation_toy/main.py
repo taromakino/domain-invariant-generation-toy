@@ -24,7 +24,7 @@ def main(args):
 
 
     def ckpt_fpath(inference_stage):
-        return os.path.join(args.dpath, args.z_norm_mult_str, inference_stage.value, f'version_{args.seed}',
+        return os.path.join(args.dpath, f'z_norm_mult={args.z_norm_mult}', inference_stage.value, f'version_{args.seed}',
             'checkpoints', 'best.ckpt')
 
 
