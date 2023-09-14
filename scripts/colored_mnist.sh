@@ -1,14 +1,14 @@
 export CODE_DPATH=/home/makinot1/git/domain-invariant-generation-toy/domain_invariant_generation_toy
 
-export Z_NORM_MULT=0.001
+export REG_MULT=0.001
 export DATASET=colored_mnist
-export DPATH=$RESULTS_DPATH/$DATASET/z_norm_mult=$Z_NORM_MULT
+export DPATH=$RESULTS_DPATH/$DATASET/reg_mult=REG_MULT
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
 --task vae \
---z_norm_mult $Z_NORM_MULT
+--reg_mult REG_MULT
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
