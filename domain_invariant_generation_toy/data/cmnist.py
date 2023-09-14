@@ -89,7 +89,7 @@ def make_test_data(batch_size):
     return make_dataloader((x, y, e, c, s), batch_size, False)
 
 
-def make_data(train_ratio, batch_size):
+def make_data(train_ratio, batch_size_train, batch_size_test):
     x, y, e, c, s = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
@@ -97,9 +97,9 @@ def make_data(train_ratio, batch_size):
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
     x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
-    data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
-    data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
-    data_test = make_test_data(batch_size)
+    data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size_train, True)
+    data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size_train, False)
+    data_test = make_test_data(batch_size_test)
     return data_train, data_val, data_test
 
 

@@ -28,7 +28,7 @@ def main(args):
     pl.seed_everything(args.seed)
     task_dpath = os.path.join(args.dpath, args.task.value)
     save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
-    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
+    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size_train, args.batch_size_test)
     if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
         model = ERM(args.task, X_SIZE[args.dataset], args.h_sizes, args.lr)
         trainer = make_trainer(task_dpath, args.n_epochs, True)
@@ -44,11 +44,10 @@ def main(args):
         trainer = make_trainer(task_dpath, 1, True)
         trainer.test(model, data_train)
         trainer.save_checkpoint(ckpt_fpath(Task.Q_Z))
-    else:
-        assert args.task == Task.CLASSIFY
+    elif args.task == Task.CLASSIFY:
         model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task, lr_inference=args.lr_inference,
-            n_steps=args.n_steps, map_location='cpu')
-        trainer = make_trainer(task_dpath, args.n_epochs, True)
+            n_steps=args.n_steps)
+        trainer = make_trainer(task_dpath, args.n_epochs, False)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test)
 
@@ -60,7 +59,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--task', type=Task, choices=list(Task), required=True)
     parser.add_argument('--train_ratio', type=float, default=0.8)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size_train', type=int, default=128)
+    parser.add_argument('--batch_size_test', type=int, default=2048)
     parser.add_argument('--is_erm', action='store_true')
     parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
