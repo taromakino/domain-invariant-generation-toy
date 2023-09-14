@@ -47,7 +47,7 @@ def main(args):
     else:
         assert args.task == Task.CLASSIFY
         model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task, lr_inference=args.lr_inference,
-            n_steps=args.n_steps)
+            n_steps=args.n_steps, map_location='cpu')
         trainer = make_trainer(task_dpath, args.n_epochs, True)
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test)
