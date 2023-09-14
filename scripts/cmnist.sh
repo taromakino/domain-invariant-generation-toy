@@ -18,7 +18,12 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task classify
+--task classify_train
+
+python $CODE_DPATH/main.py \
+--dataset $DATASET \
+--dpath $DPATH \
+--task classify_test
 
 python $CODE_DPATH/generate_sample_prior.py \
 --dpath $DPATH
