@@ -47,7 +47,7 @@ def main(args):
         model = Model.load_from_checkpoint(ckpt_fpath(Task.VAE), task=args.task)
         trainer = make_trainer(task_dpath, 1, True)
         trainer.test(model, data_train)
-        trainer.save_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+        trainer.save_checkpoint(ckpt_fpath(Task.Q_Z))
     elif args.task == Task.INFER_Z:
         model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), dpath=task_dpath, task=args.task,
             lr_inference=args.lr_inference, n_steps=args.n_steps)
