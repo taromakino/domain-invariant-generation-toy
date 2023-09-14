@@ -69,11 +69,9 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, dpath, seed, task, x_size, z_size, h_sizes, reg_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, task, x_size, z_size, h_sizes, reg_mult, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
-        self.dpath = dpath
-        self.seed = seed
         self.task = task
         self.z_size = z_size
         self.reg_mult = reg_mult
@@ -137,14 +135,14 @@ class Model(pl.LightningModule):
             loss = -log_prob_x_z + kl
             return loss
         else:
-            assert self.task == Task.CLASSIFY
+            assert self.task == Task.CLASSIFY_TRAIN
             y_pred, log_prob_y_zc = self.classify_train(x, y, e)
             loss = -log_prob_y_zc
             self.train_acc.update(y_pred, y.long())
             return loss
 
     def on_train_epoch_end(self):
-        if self.task == Task.CLASSIFY:
+        if self.task == Task.CLASSIFY_TRAIN:
             self.log('train_acc', self.train_acc.compute())
 
     def validation_step(self, batch, batch_idx):
@@ -156,14 +154,14 @@ class Model(pl.LightningModule):
             self.log('val_kl', kl, on_step=False, on_epoch=True)
             self.log('val_loss', loss, on_step=False, on_epoch=True)
         else:
-            assert self.task == Task.CLASSIFY
+            assert self.task == Task.CLASSIFY_TRAIN
             y_pred, log_prob_y_zc = self.classify_train(x, y, e)
             loss = -log_prob_y_zc
             self.log('val_loss', loss, on_step=False, on_epoch=True)
             self.val_acc.update(y_pred, y.long())
 
     def on_validation_epoch_end(self):
-        if self.task == Task.CLASSIFY:
+        if self.task == Task.CLASSIFY_TRAIN:
             self.log('val_acc', self.val_acc.compute())
 
     def e_invariant_loss(self, x, z):
@@ -195,14 +193,13 @@ class Model(pl.LightningModule):
         return y_pred, optim_log_prob_x_z, optim_z_norm, optim_loss
 
     def test_step(self, batch, batch_idx):
+        x, y, e, c, s = batch
         if self.task == Task.Q_Z:
-            x, y, e, c, s = batch
             posterior_dist = self.encoder(x, y, e)
             z = self.sample_z(posterior_dist)
             self.z.append(z.detach().cpu())
         else:
-            assert self.task == Task.CLASSIFY
-            x, y, e, c, s = batch
+            assert self.task == Task.CLASSIFY_TEST
             with torch.set_grad_enabled(True):
                 y_pred, log_prob_x_z, z_norm, loss = self.classify_test(x)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
@@ -216,7 +213,7 @@ class Model(pl.LightningModule):
             self.q_mu.data = torch.mean(z, 0)
             self.q_var.data = torch.var(z, 0)
         else:
-            assert self.task == Task.CLASSIFY
+            assert self.task == Task.CLASSIFY_TEST
             self.log('test_acc', self.test_acc.compute())
 
     def configure_grad(self):
@@ -230,16 +227,21 @@ class Model(pl.LightningModule):
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        else:
-            assert self.task == Task.CLASSIFY
+        elif self.task == Task.CLASSIFY_TRAIN:
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = True
+        else:
+            assert self.task == Task.CLASSIFY_TEST
+            for params in self.vae_params:
+                params.requires_grad = False
+            for params in self.classifier.parameters():
+                params.requires_grad = False
 
 
     def configure_optimizers(self):
         if self.task == Task.VAE:
             return Adam(self.vae_params, lr=self.lr, weight_decay=self.weight_decay)
-        elif self.task == Task.CLASSIFY:
+        elif self.task == Task.CLASSIFY_TRAIN:
             return Adam(self.classifier.parameters(), lr=self.lr, weight_decay=self.weight_decay)

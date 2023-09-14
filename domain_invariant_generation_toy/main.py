@@ -21,8 +21,8 @@ def main(args):
             inference_mode=inference_mode)
 
 
-    def ckpt_fpath(inference_stage):
-        return os.path.join(args.dpath, inference_stage.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
+    def ckpt_fpath(task):
+        return os.path.join(args.dpath, task.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
 
 
     pl.seed_everything(args.seed)
@@ -35,8 +35,8 @@ def main(args):
         trainer.fit(model, data_train, data_val)
         trainer.test(model, data_test, ckpt_path='best')
     elif args.task == Task.VAE:
-        model = Model(task_dpath, args.seed, args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.reg_mult,
-            args.weight_decay, args.lr, args.lr_inference, args.n_steps)
+        model = Model(args.task, X_SIZE[args.dataset], args.z_size, args.h_sizes, args.reg_mult, args.weight_decay,
+            args.lr, args.lr_inference, args.n_steps)
         trainer = make_trainer(task_dpath, args.n_epochs, True)
         trainer.fit(model, data_train, data_val)
     elif args.task == Task.Q_Z:
@@ -44,12 +44,16 @@ def main(args):
         trainer = make_trainer(task_dpath, 1, True)
         trainer.test(model, data_train)
         trainer.save_checkpoint(ckpt_fpath(Task.Q_Z))
-    elif args.task == Task.CLASSIFY:
+    elif args.task == Task.CLASSIFY_TRAIN:
         model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task, lr_inference=args.lr_inference,
             n_steps=args.n_steps)
         trainer = make_trainer(task_dpath, args.n_epochs, False)
         trainer.fit(model, data_train, data_val)
-        trainer.test(model, data_test)
+    else:
+        assert args.task == Task.CLASSIFY_TEST
+        model = Model.load_from_checkpoint(ckpt_fpath(Task.CLASSIFY_TRAIN), task=args.task)
+        trainer = make_trainer(task_dpath, 1, True)
+        trainer.test(model, data_train)
 
 
 if __name__ == '__main__':
