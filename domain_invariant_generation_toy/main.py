@@ -24,13 +24,11 @@ def main(args):
 
 
     def ckpt_fpath(inference_stage):
-        return os.path.join(args.dpath, f'z_norm_mult={args.z_norm_mult}', inference_stage.value, f'version_{args.seed}',
-            'checkpoints', 'best.ckpt')
+        return os.path.join(args.dpath, inference_stage.value, f'version_{args.seed}', 'checkpoints', 'best.ckpt')
 
 
     pl.seed_everything(args.seed)
-    z_norm_mult_str = f'z_norm_mult={args.z_norm_mult}'
-    task_dpath = os.path.join(args.dpath, z_norm_mult_str, args.task.value)
+    task_dpath = os.path.join(args.dpath, args.task.value)
     save_file(args, os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.task == Task.ERM_Y_C or args.task == Task.ERM_Y_S or args.task == Task.ERM_Y_X:
@@ -55,8 +53,8 @@ def main(args):
         trainer.test(model, data_test)
     else:
         assert args.task == Task.CLASSIFY
-        data_test = make_dataloader(torch.load(os.path.join(args.dpath, z_norm_mult_str, Task.INFER_Z.value,
-            f'version_{args.seed}', 'z.pt')), args.batch_size, False)
+        data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, f'version_{args.seed}',
+            'z.pt')), args.batch_size, False)
         model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task)
         trainer = make_trainer(task_dpath, 1, True)
         trainer.test(model, data_test)
