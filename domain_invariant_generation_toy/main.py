@@ -1,6 +1,5 @@
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, X_SIZE
 from models.erm import ERM
@@ -9,7 +8,6 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task
 from utils.file import save_file
-from utils.nn_utils import make_dataloader
 
 
 def main(args):
@@ -46,17 +44,11 @@ def main(args):
         trainer = make_trainer(task_dpath, 1, True)
         trainer.test(model, data_train)
         trainer.save_checkpoint(ckpt_fpath(Task.Q_Z))
-    elif args.task == Task.INFER_Z:
-        model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), dpath=task_dpath, task=args.task,
-            lr_inference=args.lr_inference, n_steps=args.n_steps)
-        trainer = make_trainer(task_dpath, args.n_epochs, False)
-        trainer.test(model, data_test)
     else:
         assert args.task == Task.CLASSIFY
-        data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, f'version_{args.seed}',
-            'z.pt')), args.batch_size, False)
-        model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task)
-        trainer = make_trainer(task_dpath, 1, True)
+        model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task, lr_inference=args.lr_inference,
+            n_steps=args.n_steps)
+        trainer = make_trainer(task_dpath, args.n_epochs, False)
         trainer.test(model, data_test)
 
 

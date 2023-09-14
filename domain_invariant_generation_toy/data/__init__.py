@@ -1,4 +1,4 @@
-import data.colored_mnist
+import data.cmnist
 import data.dsprites
 from utils.plot import plot_grayscale_image, plot_red_green_image
 
@@ -8,23 +8,23 @@ N_ENVS = 2
 
 
 MAKE_DATA = {
-    'colored_mnist': data.colored_mnist.make_data,
+    'cmnist': data.cmnist.make_data,
     'dsprites': data.dsprites.make_data
 }
 
 
 PLOT = {
-    'colored_mnist': plot_red_green_image,
+    'cmnist': plot_red_green_image,
     'dsprites': plot_grayscale_image
 }
 
 
 IMAGE_SHAPE = {
-    'colored_mnist': (2, 28, 28),
+    'cmnist': (2, 28, 28),
     'dsprites': (data.dsprites.IMAGE_SIZE, data.dsprites.IMAGE_SIZE)
 }
 
 X_SIZE = {
-    'colored_mnist': data.colored_mnist.X_SIZE,
+    'cmnist': data.cmnist.X_SIZE,
     'dsprites': data.dsprites.X_SIZE
 }

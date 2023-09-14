@@ -7,5 +7,4 @@ class Task(Enum):
     ERM_Y_X = 'erm_y_x'
     VAE = 'vae'
     Q_Z = 'q_z'
-    INFER_Z = 'infer_z'
     CLASSIFY = 'classify'
