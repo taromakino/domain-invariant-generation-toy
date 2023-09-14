@@ -230,7 +230,8 @@ class Model(pl.LightningModule):
                 params.requires_grad = False
             for params in self.classifier.parameters():
                 params.requires_grad = False
-        elif self.task == Task.CLASSIFY:
+        else:
+            assert self.task == Task.CLASSIFY
             for params in self.vae_params:
                 params.requires_grad = False
             for params in self.classifier.parameters():

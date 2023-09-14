@@ -22,7 +22,8 @@ def main(args):
     task_dpath = os.path.join(args.dpath, Task.VAE.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, data_val, data_test = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
+    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size_train,
+        existing_args.batch_size_test)
     model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, c, s = data_train.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
