@@ -128,7 +128,7 @@ class Model(pl.LightningModule):
 
     def classify_train(self, x, y, e):
         posterior_dist = self.encoder(x, y, e)
-        z = self.sample_z(posterior_dist)
+        z = posterior_dist.loc
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float())
