@@ -10,25 +10,27 @@ from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
-GAUSSIAN_INIT_SD = 0.1
-
-
 class Encoder(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes):
+    def __init__(self, x_size, z_size, h_sizes, rank):
         super().__init__()
         self.z_size = z_size
+        self.rank = rank
         self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
+        self.low_rank = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size * rank)
+        self.diag = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
 
     def forward(self, x, y, e):
         batch_size = len(x)
         mu = self.mu(x)
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y, e, :]
-        cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
-        cov = arr_to_tril(cov[torch.arange(batch_size), y, e, :])
-        return D.MultivariateNormal(mu, scale_tril=cov)
+        low_rank = self.low_rank(x)
+        low_rank = low_rank.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size, self.rank)
+        low_rank = low_rank[torch.arange(batch_size), y, e, :]
+        diag = self.diag(x)
+        diag = diag.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
+        diag = diag[torch.arange(batch_size), y, e, :]
+        return D.MultivariateNormal(mu, scale_tril=arr_to_tril(low_rank, diag))
 
 
 class Decoder(nn.Module):
@@ -42,26 +44,30 @@ class Decoder(nn.Module):
 
 
 class Prior(nn.Module):
-    def __init__(self, z_size):
+    def __init__(self, z_size, rank):
         super().__init__()
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        nn.init.normal_(self.mu_causal, 0, GAUSSIAN_INIT_SD)
-        nn.init.normal_(self.cov_causal, 0, GAUSSIAN_INIT_SD)
+        self.low_rank_causal = nn.Parameter(torch.zeros(N_ENVS, z_size, rank))
+        self.diag_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
+        nn.init.kaiming_normal_(self.mu_causal)
+        nn.init.kaiming_normal_(self.low_rank_causal)
+        nn.init.kaiming_normal_(self.diag_causal)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        nn.init.normal_(self.mu_spurious, 0, GAUSSIAN_INIT_SD)
-        nn.init.normal_(self.cov_spurious, 0, GAUSSIAN_INIT_SD)
+        self.low_rank_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size, rank))
+        self.diag_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
+        nn.init.kaiming_normal_(self.mu_spurious)
+        nn.init.kaiming_normal_(self.low_rank_spurious)
+        nn.init.kaiming_normal_(self.diag_spurious)
 
     def forward(self, y, e):
         batch_size = len(y)
         mu_causal = self.mu_causal[e]
         mu_spurious = self.mu_spurious[y, e]
         mu = torch.hstack((mu_causal, mu_spurious))
-        cov_causal = arr_to_cov(self.cov_causal[e])
-        cov_spurious = arr_to_cov(self.cov_spurious[y, e])
+        cov_causal = arr_to_cov(self.low_rank_causal[e], self.diag_causal[e])
+        cov_spurious = arr_to_cov(self.low_rank_spurious[y, e], self.diag_spurious[y, e])
         cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=y.device)
         cov[:, :self.z_size, :self.z_size] = cov_causal
         cov[:, self.z_size:, self.z_size:] = cov_spurious
@@ -69,7 +75,7 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, h_sizes, reg_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, task, x_size, z_size, h_sizes, rank, reg_mult, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -81,13 +87,13 @@ class Model(pl.LightningModule):
         self.n_steps = n_steps
         self.vae_params = []
         # q(z_c|x,y,e)
-        self.encoder = Encoder(x_size, z_size, h_sizes)
+        self.encoder = Encoder(x_size, z_size, h_sizes, rank)
         self.vae_params += list(self.encoder.parameters())
         # p(x|z_c,z_s)
         self.decoder = Decoder(x_size, z_size, h_sizes)
         self.vae_params += list(self.decoder.parameters())
         # p(z_c,z_s|y,e)
-        self.prior = Prior(z_size)
+        self.prior = Prior(z_size, rank)
         self.vae_params += list(self.prior.parameters())
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)

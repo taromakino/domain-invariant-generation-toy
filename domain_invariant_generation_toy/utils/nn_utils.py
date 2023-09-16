@@ -25,13 +25,9 @@ def make_dataloader(data_tuple, batch_size, is_train):
     return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
-def arr_to_cov(arr):
-    batch_size, size = arr.shape
-    cov =  torch.bmm(arr.unsqueeze(2), arr.unsqueeze(1))
-    diag_idxs = torch.arange(size)
-    cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
-    return cov
+def arr_to_cov(low_rank, diag):
+    return torch.bmm(low_rank, low_rank.transpose(1, 2)) + torch.diag_embed(F.softplus(diag))
 
 
-def arr_to_tril(arr):
-    return torch.linalg.cholesky(arr_to_cov(arr))
+def arr_to_tril(low_rank, diag):
+    return torch.linalg.cholesky(arr_to_cov(low_rank, diag))

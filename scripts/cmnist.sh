@@ -7,8 +7,7 @@ export DPATH=$RESULTS_DPATH/$DATASET/reg_mult=$REG_MULT
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task vae \
---reg_mult $REG_MULT
+--task vae
 
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
@@ -23,7 +22,8 @@ python $CODE_DPATH/main.py \
 python $CODE_DPATH/main.py \
 --dataset $DATASET \
 --dpath $DPATH \
---task classify_test
+--task classify_test \
+--reg_mult $REG_MULT
 
 python $CODE_DPATH/generate_sample_prior.py \
 --dpath $DPATH
