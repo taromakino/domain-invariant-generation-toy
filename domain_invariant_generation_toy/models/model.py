@@ -7,7 +7,7 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
-from utils.nn_utils import MLP, size_to_n_tril, arr_to_tril, arr_to_cov
+from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
 GAUSSIAN_INIT_SD = 0.1
@@ -18,7 +18,7 @@ class Encoder(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * size_to_n_tril(2 * z_size))
+        self.cov = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
 
     def forward(self, x, y, e):
         batch_size = len(x)
@@ -26,7 +26,7 @@ class Encoder(nn.Module):
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y, e, :]
         cov = self.cov(x)
-        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, size_to_n_tril(2 * self.z_size))
+        cov = cov.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         cov = arr_to_tril(cov[torch.arange(batch_size), y, e, :])
         return D.MultivariateNormal(mu, scale_tril=cov)
 
@@ -46,12 +46,12 @@ class Prior(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, size_to_n_tril(z_size)))
+        self.cov_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
         nn.init.normal_(self.mu_causal, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_causal, 0, GAUSSIAN_INIT_SD)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, size_to_n_tril(z_size)))
+        self.cov_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
         nn.init.normal_(self.mu_spurious, 0, GAUSSIAN_INIT_SD)
         nn.init.normal_(self.cov_spurious, 0, GAUSSIAN_INIT_SD)
 

@@ -25,42 +25,13 @@ def make_dataloader(data_tuple, batch_size, is_train):
     return DataLoader(TensorDataset(*data_tuple), shuffle=is_train, batch_size=batch_size)
 
 
-def size_to_n_tril(size):
-    '''
-    Return the number of nonzero entries in a square lower triangular matrix with size rows/columns
-    '''
-    return int(size * (size + 1) / 2)
-
-
-def n_tril_to_size(n_tril):
-    '''
-    Return the number of rows/columns in a square lower triangular matrix with n_tril nonzero entries
-    '''
-    return int((-1 + math.sqrt(1 + 8 * n_tril)) / 2)
+def arr_to_cov(arr):
+    batch_size, size = arr.shape
+    cov =  torch.bmm(arr.unsqueeze(2), arr.unsqueeze(1))
+    diag_idxs = torch.arange(size)
+    cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
+    return cov
 
 
 def arr_to_tril(arr):
-    '''
-    Return a lower triangular matrix with nonzero diagonal entries
-    '''
-    batch_size, n_tril = arr.shape
-    size = n_tril_to_size(n_tril)
-    tril = torch.zeros(batch_size, size, size, dtype=torch.float32, device=arr.device)
-    tril[:, *torch.tril_indices(size, size)] = arr
-    diag_idxs = torch.arange(size)
-    tril[:, diag_idxs, diag_idxs] = F.softplus(tril[:, diag_idxs, diag_idxs])
-    return tril
-
-
-def tril_to_cov(tril):
-    '''
-    Return a full covariance matrix
-    '''
-    return torch.bmm(tril, torch.transpose(tril, 1, 2))
-
-
-def arr_to_cov(arr):
-    '''
-    Return a full covariance matrix
-    '''
-    return tril_to_cov(arr_to_tril(arr))
+    return torch.linalg.cholesky(arr_to_cov(arr))
