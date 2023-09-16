@@ -29,7 +29,7 @@ def arr_to_cov(arr):
     batch_size, size = arr.shape
     cov =  torch.bmm(arr.unsqueeze(2), arr.unsqueeze(1))
     diag_idxs = torch.arange(size)
-    cov[:, diag_idxs, diag_idxs] = F.softplus(cov[:, diag_idxs, diag_idxs])
+    cov[:, diag_idxs, diag_idxs] = torch.exp(cov[:, diag_idxs, diag_idxs])
     return cov
 
 

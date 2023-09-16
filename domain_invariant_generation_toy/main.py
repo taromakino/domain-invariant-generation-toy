@@ -45,13 +45,13 @@ def main(args):
         trainer.test(model, data_train)
         trainer.save_checkpoint(ckpt_fpath(Task.Q_Z))
     elif args.task == Task.CLASSIFY_TRAIN:
-        model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task, lr_inference=args.lr_inference,
-            n_steps=args.n_steps)
+        model = Model.load_from_checkpoint(ckpt_fpath(Task.Q_Z), task=args.task)
         trainer = make_trainer(task_dpath, args.n_epochs, False)
         trainer.fit(model, data_train, data_val)
     else:
         assert args.task == Task.CLASSIFY_TEST
-        model = Model.load_from_checkpoint(ckpt_fpath(Task.CLASSIFY_TRAIN), task=args.task)
+        model = Model.load_from_checkpoint(ckpt_fpath(Task.CLASSIFY_TRAIN), task=args.task, reg_mult=args.reg_mult,
+            lr_inference=args.lr_inference, n_steps=args.n_steps)
         trainer = make_trainer(task_dpath, 1, False)
         trainer.test(model, data_test)
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_train', type=int, default=128)
     parser.add_argument('--batch_size_test', type=int, default=2048)
     parser.add_argument('--is_erm', action='store_true')
-    parser.add_argument('--z_size', type=int, default=50)
+    parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
     parser.add_argument('--reg_mult', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)

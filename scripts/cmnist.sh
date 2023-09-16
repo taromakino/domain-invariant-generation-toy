@@ -1,6 +1,6 @@
 export CODE_DPATH=/home/makinot1/git/domain-invariant-generation-toy/domain_invariant_generation_toy
 
-export REG_MULT=0.001
+export REG_MULT=1
 export DATASET=cmnist
 export DPATH=$RESULTS_DPATH/$DATASET/reg_mult=$REG_MULT
 
