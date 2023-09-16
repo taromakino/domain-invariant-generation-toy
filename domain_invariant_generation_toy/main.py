@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_train', type=int, default=128)
     parser.add_argument('--batch_size_test', type=int, default=2048)
     parser.add_argument('--is_erm', action='store_true')
-    parser.add_argument('--z_size', type=int, default=100)
+    parser.add_argument('--z_size', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
     parser.add_argument('--reg_mult', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
