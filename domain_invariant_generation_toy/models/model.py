@@ -11,7 +11,7 @@ from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
 class Encoder(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes, rank):
+    def __init__(self, x_size, z_size, rank, h_sizes):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
@@ -75,7 +75,7 @@ class Prior(nn.Module):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, h_sizes, rank, reg_mult, weight_decay, lr, lr_inference, n_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, reg_mult, weight_decay, lr, lr_inference, n_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -87,7 +87,7 @@ class Model(pl.LightningModule):
         self.n_steps = n_steps
         self.vae_params = []
         # q(z_c|x,y,e)
-        self.encoder = Encoder(x_size, z_size, h_sizes, rank)
+        self.encoder = Encoder(x_size, z_size, rank, h_sizes)
         self.vae_params += list(self.encoder.parameters())
         # p(x|z_c,z_s)
         self.decoder = Decoder(x_size, z_size, h_sizes)
