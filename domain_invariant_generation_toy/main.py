@@ -96,6 +96,7 @@ def main(args):
                 ModelCheckpoint(every_n_epochs=10, save_top_k=-1)],
             max_epochs=args.n_epochs)
         trainer.fit(model, data_train, data_val_iid)
+        save_file(args, os.path.join(args.dpath, args.task.value, f'version_{args.seed}', 'args.pkl'))
     elif args.task == Task.Q_Z:
         trainer = pl.Trainer(
             logger=CSVLogger(os.path.join(args.dpath, args.task.value, args.eval_stage.value), name='',
