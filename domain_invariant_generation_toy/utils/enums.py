@@ -2,10 +2,15 @@ from enum import Enum
 
 
 class Task(Enum):
-    ERM_Y_C = 'erm_y_c'
-    ERM_Y_S = 'erm_y_s'
-    ERM_Y_X = 'erm_y_x'
+    ERM_X = 'erm_x'
+    ERM_ZC = 'erm_zc'
+    ERM_ZS = 'erm_zs'
     VAE = 'vae'
     Q_Z = 'q_z'
-    CLASSIFY_TRAIN = 'classify_train'
-    CLASSIFY_TEST = 'classify_test'
+    INFER_Z = 'infer_z'
+
+
+class EvalStage(Enum):
+    TRAIN = 'train'
+    VAL = 'val'
+    TEST = 'test'

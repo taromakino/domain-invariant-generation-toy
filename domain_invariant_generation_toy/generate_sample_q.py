@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, PLOT, IMAGE_SHAPE
-from models.model import Model
+from models.vae import VAE
 from utils.enums import Task
 from utils.file import load_file
 
@@ -13,9 +13,8 @@ def main(args):
     task_dpath = os.path.join(args.dpath, Task.Q_Z.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size_train,
-        existing_args.batch_size_test)
-    model = Model.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
+    model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     q = model.q()
     x, y, e, _, _ = data_train.dataset[:]
     for example_idx in range(args.n_examples):
