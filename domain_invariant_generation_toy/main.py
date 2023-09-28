@@ -89,8 +89,7 @@ def main(args):
             logger=CSVLogger(os.path.join(args.dpath, args.task.value), name='', version=args.seed),
             callbacks=[
                 EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
-                ModelCheckpoint(monitor='val_loss', filename='best'),
-                ModelCheckpoint(every_n_epochs=10, save_top_k=-1)],
+                ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
         trainer.fit(model, data_train, data_val_iid)
         save_file(args, os.path.join(args.dpath, args.task.value, f'version_{args.seed}', 'args.pkl'))
