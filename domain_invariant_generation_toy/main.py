@@ -57,13 +57,10 @@ def make_model(args):
             return erm.ERM_ZS.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.VAE:
         return vae.VAE(args.task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_sizes, args.y_mult, args.reg_mult,
-            args.weight_decay, args.lr, args.lr_infer, args.n_infer_steps)
-    elif args.task == Task.Q_Z:
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
+            args.weight_decay, args.lr)
     else:
         assert args.task == Task.INFER_Z
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.Q_Z), task=args.task, lr_infer=args.lr_infer,
-            n_infer_steps=args.n_infer_steps)
+        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
 
 
 def main(args):
@@ -97,13 +94,6 @@ def main(args):
             max_epochs=args.n_epochs)
         trainer.fit(model, data_train, data_val_iid)
         save_file(args, os.path.join(args.dpath, args.task.value, f'version_{args.seed}', 'args.pkl'))
-    elif args.task == Task.Q_Z:
-        trainer = pl.Trainer(
-            logger=CSVLogger(os.path.join(args.dpath, args.task.value, args.eval_stage.value), name='',
-                version=args.seed),
-            max_epochs=1)
-        trainer.test(model, data_train)
-        trainer.save_checkpoint(ckpt_fpath(args, Task.Q_Z))
     else:
         assert args.task == Task.INFER_Z
         trainer = pl.Trainer(
@@ -131,8 +121,6 @@ if __name__ == '__main__':
     parser.add_argument('--reg_mult', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--lr_infer', type=float, default=0.01)
-    parser.add_argument('--n_infer_steps', type=int, default=2000)
     parser.add_argument('--n_epochs', type=int, default=200)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     main(parser.parse_args())

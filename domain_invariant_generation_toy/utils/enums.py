@@ -6,7 +6,6 @@ class Task(Enum):
     ERM_ZC = 'erm_zc'
     ERM_ZS = 'erm_zs'
     VAE = 'vae'
-    Q_Z = 'q_z'
     INFER_Z = 'infer_z'
 
 
