@@ -10,11 +10,12 @@ from utils.file import load_file
 
 
 def main(args):
-    task_dpath = os.path.join(args.dpath, Task.VAE.value)
+    task_dpath = os.path.join(args.dpath, Task.Q_Z.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
     data_train, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
+    q = model.q()
     x, y, e, _, _ = data_train.dataset[:]
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
@@ -34,7 +35,7 @@ def main(args):
         plot(axes[0, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         plot(axes[1, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         for col_idx in range(2, args.n_cols):
-            z_sample = posterior_dist_seed.sample()
+            z_sample = q.sample()[None]
             zc_sample, zs_sample = torch.chunk(z_sample, 2, dim=1)
             x_pred_causal = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_sample, zs_seed))))
             x_pred_spurious = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_seed, zs_sample))))

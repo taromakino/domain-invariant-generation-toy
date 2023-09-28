@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
+from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
@@ -86,8 +87,11 @@ class VAE(pl.LightningModule):
         self.prior = Prior(z_size, rank)
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
+        # q(z)
+        self.q_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
+        self.q_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.z_sample = []
-        self.z, self.y, self.e = [], [], []
+        self.z_infer, self.y, self.e = [], [], []
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -132,16 +136,26 @@ class VAE(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
-        z = self.encoder(x).loc
-        self.z.append(z.detach().cpu())
-        self.y.append(y.cpu())
-        self.e.append(e.cpu())
+        if self.task == Task.Q_Z:
+            z = self.encoder(x).loc
+            self.z_sample.append(z.detach().cpu())
+        else:
+            z = self.encoder(x).loc
+            self.z_infer.append(z.detach().cpu())
+            self.y.append(y.cpu())
+            self.e.append(e.cpu())
 
     def on_test_epoch_end(self):
-        z = torch.cat(self.z)
-        y = torch.cat(self.y)
-        e = torch.cat(self.e)
-        torch.save((z, y, e), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}', 'infer_z.pt'))
+        if self.task == Task.Q_Z:
+            z = torch.cat(self.z_sample)
+            self.q_mu.data = torch.mean(z, 0)
+            self.q_var.data = torch.var(z, 0)
+        else:
+            assert self.task == Task.INFER_Z
+            z = torch.cat(self.z_infer)
+            y = torch.cat(self.y)
+            e = torch.cat(self.e)
+            torch.save((z, y, e), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}', 'infer_z.pt'))
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)

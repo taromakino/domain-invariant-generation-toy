@@ -58,9 +58,11 @@ def make_model(args):
     elif args.task == Task.VAE:
         return vae.VAE(args.task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_sizes, args.y_mult, args.reg_mult,
             args.weight_decay, args.lr)
+    elif args.task == Task.Q_Z:
+        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
     else:
         assert args.task == Task.INFER_Z
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
+        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.Q_Z), task=args.task)
 
 
 def main(args):
@@ -92,6 +94,14 @@ def main(args):
                 ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
         trainer.fit(model, data_train, data_val_iid)
+        save_file(args, os.path.join(args.dpath, args.task.value, f'version_{args.seed}', 'args.pkl'))
+    elif args.task == Task.Q_Z:
+        trainer = pl.Trainer(
+            logger=CSVLogger(os.path.join(args.dpath, args.task.value), name='',
+                version=args.seed),
+            max_epochs=1)
+        trainer.test(model, data_train)
+        trainer.save_checkpoint(ckpt_fpath(args, args.task))
         save_file(args, os.path.join(args.dpath, args.task.value, f'version_{args.seed}', 'args.pkl'))
     else:
         assert args.task == Task.INFER_Z
