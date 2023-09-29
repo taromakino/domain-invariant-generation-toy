@@ -54,10 +54,10 @@ class Prior(nn.Module):
 
     def forward(self, y_embed, e_embed):
         batch_size = len(y_embed)
-        mu_causal = self.mu_causal(y_embed)
-        low_rank_causal = self.low_rank_causal(y_embed)
+        mu_causal = self.mu_causal(e_embed)
+        low_rank_causal = self.low_rank_causal(e_embed)
         low_rank_causal = low_rank_causal.reshape(batch_size, self.z_size, self.rank)
-        diag_causal = self.diag_causal(y_embed)
+        diag_causal = self.diag_causal(e_embed)
         mu_spurious = self.mu_spurious(y_embed, e_embed)
         low_rank_spurious = self.low_rank_spurious(y_embed, e_embed)
         low_rank_spurious = low_rank_spurious.reshape(batch_size, self.z_size, self.rank)
