@@ -72,7 +72,7 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, weight_decay, lr):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, weight_decay, lr, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -81,6 +81,8 @@ class VAE(pl.LightningModule):
         self.reg_mult = reg_mult
         self.weight_decay = weight_decay
         self.lr = lr
+        self.lr_infer = lr_infer
+        self.n_infer_steps = n_infer_steps
         self.y_embed = nn.Embedding(N_CLASSES, N_CLASSES)
         self.e_embed = nn.Embedding(N_ENVS, N_ENVS)
         # q(z_c|x,y,e)
