@@ -72,11 +72,13 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, weight_decay, lr, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, alpha, beta, reg_mult, weight_decay, lr, lr_infer,
+            n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
+        self.alpha = alpha
         self.beta = beta
         self.reg_mult = reg_mult
         self.weight_decay = weight_decay
@@ -142,7 +144,7 @@ class VAE(pl.LightningModule):
         self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
-    def e_invariant_loss(self, x, z, q):
+    def e_invariant_loss(self, x, z, y_embed, e_embed):
         log_prob_x_z = self.decoder(x, z).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c)
@@ -150,20 +152,26 @@ class VAE(pl.LightningModule):
         prob_y_neg_zc = 1 - prob_y_pos_zc
         prob_y_zc = torch.hstack((prob_y_neg_zc, prob_y_pos_zc))
         log_prob_y_zc = torch.log(prob_y_zc.max(dim=1).values).mean()
-        log_prob_z = q.log_prob(z).mean()
-        return log_prob_x_z, log_prob_y_zc, log_prob_z
+        log_prob_z_ye = self.prior(y_embed, e_embed).log_prob(z).mean()
+        return log_prob_x_z, log_prob_y_zc, log_prob_z_ye
 
     def infer_z(self, x):
         batch_size = len(x)
         q = self.q()
         z_sample = q.sample((batch_size,))
         z_param = nn.Parameter(z_sample)
-        optim = Adam([z_param], lr=self.lr_infer)
+        y_embed_mean = self.y_embed(torch.arange(N_CLASSES)).mean(dim=0)
+        y_embed_mean = torch.repeat_interleave(y_embed_mean[None], batch_size, dim=0)
+        y_param = nn.Parameter(y_embed_mean.detach())
+        e_embed_mean = self.e_embed(torch.arange(N_ENVS)).mean(dim=0)
+        e_embed_mean = torch.repeat_interleave(e_embed_mean[None], batch_size, dim=0)
+        e_param = nn.Parameter(e_embed_mean.detach())
+        optim = Adam([z_param, y_param, e_param], lr=self.lr_infer)
         optim_loss = torch.inf
         optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z = optim_z = None
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
-            log_prob_x_z, log_prob_y_zc, log_prob_z = self.e_invariant_loss(x, z_param, q)
+            log_prob_x_z, log_prob_y_zc, log_prob_z = self.e_invariant_loss(x, z_param, y_param, e_param)
             loss = -log_prob_x_z - log_prob_y_zc - log_prob_z
             loss.backward()
             optim.step()
