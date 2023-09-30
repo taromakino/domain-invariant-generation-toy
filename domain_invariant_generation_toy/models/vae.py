@@ -140,8 +140,8 @@ class VAE(pl.LightningModule):
         loss = -log_prob_x_z - log_prob_y_zc + self.beta * kl + self.reg_mult * z_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-        self.log('val_kl', kl, on_step=False, on_epoch=True)
-        self.log('val_z_norm', z_norm, on_step=False, on_epoch=True)
+        self.log('val_kl', self.beta * kl, on_step=False, on_epoch=True)
+        self.log('val_z_norm', self.reg_mult * z_norm, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def e_invariant_loss(self, x, z, y_embed, e_embed):
@@ -172,14 +172,14 @@ class VAE(pl.LightningModule):
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
             log_prob_x_z, log_prob_y_zc, log_prob_z_ye = self.e_invariant_loss(x, z_param, y_param, e_param)
-            loss = -log_prob_x_z - log_prob_y_zc - log_prob_z_ye
+            loss = -log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
                 optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
-                optim_log_prob_z_ye = log_prob_z_ye
+                optim_log_prob_z_ye = self.alpha * log_prob_z_ye
                 optim_z = z_param.clone()
         return optim_z, optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z_ye, optim_loss
 
