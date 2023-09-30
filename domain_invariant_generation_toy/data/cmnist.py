@@ -7,7 +7,7 @@ from utils.nn_utils import make_dataloader
 
 
 RNG = np.random.RandomState(0)
-PROB_ZERO_E0 = 0.25
+PROB_ZERO_E0 = 0.2
 X_SIZE = 2 * 28 ** 2
 
 
@@ -39,13 +39,13 @@ def make_trainval_data():
 
     colors = np.full(n_total, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
-    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     colors[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
-    colors[idxs_y1_e0] = RNG.normal(0.6, 0.05, len(idxs_y1_e0))
+    colors[idxs_y1_e0] = RNG.normal(0.8, 0.05, len(idxs_y1_e0))
     colors[idxs_y0_e1] = RNG.normal(0.8, 0.05, len(idxs_y0_e1))
-    colors[idxs_y1_e1] = RNG.normal(0.4, 0.05, len(idxs_y1_e1))
+    colors[idxs_y1_e1] = RNG.normal(0.2, 0.05, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
     images = torch.stack([images, images], dim=1)
