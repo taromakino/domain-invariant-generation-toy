@@ -168,20 +168,20 @@ class VAE(pl.LightningModule):
         e_param = nn.Parameter(e_embed_mean.detach())
         optim = Adam([z_param, y_param, e_param], lr=self.lr_infer)
         optim_loss = torch.inf
-        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z = optim_z = None
+        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z_ye = optim_z = None
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
-            log_prob_x_z, log_prob_y_zc, log_prob_z = self.e_invariant_loss(x, z_param, y_param, e_param)
-            loss = -log_prob_x_z - log_prob_y_zc - log_prob_z
+            log_prob_x_z, log_prob_y_zc, log_prob_z_ye = self.e_invariant_loss(x, z_param, y_param, e_param)
+            loss = -log_prob_x_z - log_prob_y_zc - log_prob_z_ye
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
                 optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
-                optim_log_prob_z = log_prob_z
+                optim_log_prob_z_ye = log_prob_z_ye
                 optim_z = z_param.clone()
-        return optim_z, optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z, optim_loss
+        return optim_z, optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z_ye, optim_loss
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
@@ -193,10 +193,10 @@ class VAE(pl.LightningModule):
         else:
             assert self.task == Task.INFER_Z
             with torch.set_grad_enabled(True):
-                z, log_prob_x_z, log_prob_y_zc, log_prob_z, loss = self.infer_z(x)
+                z, log_prob_x_z, log_prob_y_zc, log_prob_z_ye, loss = self.infer_z(x)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
                 self.log('log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-                self.log('log_prob_z', log_prob_z, on_step=False, on_epoch=True)
+                self.log('log_prob_z_ye', log_prob_z_ye, on_step=False, on_epoch=True)
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.z_infer.append(z.detach().cpu())
                 self.y.append(y.cpu())
