@@ -158,12 +158,6 @@ def main():
     axes[1].set_title('p(brightness|e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
-    fig, ax = plt.subplots(1, 1, figsize=(6, 3))
-    ax.hist(brightness[y == 0], alpha=0.75, color='red')
-    ax.hist(brightness[y == 1], alpha=0.75, color='blue')
-    ax.set_title('p(brightness|y)')
-    fig.suptitle('Should not be perfectly predictive')
-    fig.tight_layout()
     plt.show(block=True)
 
 
