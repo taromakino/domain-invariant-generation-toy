@@ -36,9 +36,9 @@ def make_trainval_data():
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
     brightness[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
-    brightness[idxs_y0_e1] = RNG.normal(0.5, 0.05, len(idxs_y0_e1))
-    brightness[idxs_y1_e0] = RNG.normal(0.5, 0.05, len(idxs_y1_e0))
-    brightness[idxs_y1_e1] = RNG.normal(0.8, 0.05, len(idxs_y1_e1))
+    brightness[idxs_y1_e0] = RNG.normal(0.8, 0.05, len(idxs_y1_e0))
+    brightness[idxs_y0_e1] = RNG.normal(0.8, 0.05, len(idxs_y0_e1))
+    brightness[idxs_y1_e1] = RNG.normal(0.2, 0.05, len(idxs_y1_e1))
     brightness = np.clip(brightness, 0, 1)
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
@@ -75,12 +75,7 @@ def make_test_data(batch_size):
     y = min_max_scale(width ** 2)
     y = RNG.binomial(1, y, len(y))
 
-    brightness = np.full(N_TEST, np.nan)
-    idxs_y0 = np.where(y == 0)[0]
-    idxs_y1 = np.where(y == 1)[0]
-    brightness[idxs_y0] = RNG.normal(0.8, 0.05, len(idxs_y0))
-    brightness[idxs_y1] = RNG.normal(0.2, 0.05, len(idxs_y1))
-    brightness = np.clip(brightness, 0, 1)
+    brightness = RNG.random(N_TEST)
 
     center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
     center_y = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)

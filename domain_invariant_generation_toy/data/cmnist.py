@@ -69,7 +69,7 @@ def make_test_data(batch_size):
 
     y = flip_binary(digits.clone(), 0.25)
 
-    colors = np.random.rand(n_total)[:, None, None]
+    colors = RNG.rand(n_total)[:, None, None]
 
     images = torch.stack([images, images], dim=1)
     images = images / 255
