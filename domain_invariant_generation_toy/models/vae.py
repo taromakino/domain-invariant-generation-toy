@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from utils.enums import Task
-from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
+from utils.nn_utils import MLP, arr_to_cov
 
 
 class Encoder(nn.Module):
@@ -89,14 +89,13 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, alpha, beta, reg_mult, weight_decay, lr, lr_infer,
+    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, reg_mult, weight_decay, lr, lr_infer,
             n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
-        self.alpha = alpha
-        self.beta = beta
+        self.y_mult = y_mult
         self.reg_mult = reg_mult
         self.weight_decay = weight_decay
         self.lr = lr
@@ -148,16 +147,16 @@ class VAE(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, z_norm = self.vae_loss(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + self.beta * kl + self.reg_mult * z_norm
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + kl + self.reg_mult * z_norm
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, z_norm = self.vae_loss(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + self.beta * kl + self.reg_mult * z_norm
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + kl + self.reg_mult * z_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
-        self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
-        self.log('val_kl', self.beta * kl, on_step=False, on_epoch=True)
+        self.log('val_log_prob_y_zc', self.y_mult * log_prob_y_zc, on_step=False, on_epoch=True)
+        self.log('val_kl', kl, on_step=False, on_epoch=True)
         self.log('val_z_norm', self.reg_mult * z_norm, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
