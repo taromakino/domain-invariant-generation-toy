@@ -12,9 +12,9 @@ from utils.file import load_file
 
 def sample_prior(rng, model, y, e):
     idx = rng.choice(len(y), 1)
-    prior_causal_dist = model.prior_causal(y[idx])
-    prior_spurious_dist = model.prior_causal(y[idx], e[idx])
-    return prior_causal_dist.sample(), prior_spurious_dist.sample()
+    prior_dist = model.prior(model.y_embed(y[idx]), model.e_embed(e[idx]))
+    z_sample = prior_dist.sample()
+    return torch.chunk(z_sample, 2, dim=1)
 
 
 def main(args):
@@ -28,7 +28,7 @@ def main(args):
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     for example_idx in range(args.n_examples):
         x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
-        posterior_dist_seed = model.encoder(x_seed, y_seed, e_seed)
+        posterior_dist_seed = model.encoder(x_seed, model.y_embed(y_seed), model.e_embed(e_seed))
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, args.n_cols, figsize=(2 * args.n_cols, 2 * 2))
