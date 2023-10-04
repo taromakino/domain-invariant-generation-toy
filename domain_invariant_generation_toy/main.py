@@ -2,29 +2,16 @@ import models.erm as erm
 import models.vae as vae
 import os
 import pytorch_lightning as pl
-import torch
 from argparse import ArgumentParser
 from data import MAKE_DATA, X_SIZE
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task, EvalStage
 from utils.file import save_file
-from utils.nn_utils import make_dataloader
 
 
 def make_data(args):
-    if args.task in [
-        Task.ERM_ZC,
-        Task.ERM_ZS
-    ]:
-        data_train = make_dataloader(torch.load(os.path.join(args.dpath, Task.CLASSIFY.value, EvalStage.TRAIN.value,
-            f'version_{args.seed}', 'infer_z.pt')), args.batch_size, True)
-        data_val = make_dataloader(torch.load(os.path.join(args.dpath, Task.CLASSIFY.value, EvalStage.VAL.value,
-            f'version_{args.seed}', 'infer_z.pt')), args.batch_size, False)
-        data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.CLASSIFY.value, EvalStage.TEST.value,
-            f'version_{args.seed}', 'infer_z.pt')), args.batch_size, False)
-    else:
-        data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
+    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.eval_stage == EvalStage.TRAIN:
         data_eval = data_train
     elif args.eval_stage == EvalStage.VAL:
