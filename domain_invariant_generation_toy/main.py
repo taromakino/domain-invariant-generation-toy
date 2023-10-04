@@ -42,17 +42,17 @@ def ckpt_fpath(args, task):
 def make_model(args):
     if args.task == Task.ERM_X:
         if args.is_train:
-            return erm.ERM_X(X_SIZE[args.dataset], args.h_sizes, args.lr)
+            return erm.ERM_X(X_SIZE[args.dataset], args.h_size, args.n_hidden, args.lr)
         else:
             return erm.ERM_X.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.ERM_ZC:
         if args.is_train:
-            return erm.ERM_ZC(args.z_size, args.h_sizes, args.lr)
+            return erm.ERM_ZC(args.z_size, args.h_size, args.n_hidden, args.lr)
         else:
             return erm.ERM_ZC.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.ERM_ZS:
         if args.is_train:
-            return erm.ERM_ZS(args.z_size, args.h_sizes, args.lr)
+            return erm.ERM_ZS(args.z_size, args.h_size, args.n_hidden, args.lr)
         else:
             return erm.ERM_ZS.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.VAE:

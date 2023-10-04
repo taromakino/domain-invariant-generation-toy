@@ -45,10 +45,10 @@ class ERMBase(pl.LightningModule):
 
 
 class ERM_X(ERMBase):
-    def __init__(self, x_size, h_sizes, lr):
+    def __init__(self, x_size, h_size, n_hidden, lr):
         super().__init__(lr)
         self.save_hyperparameters()
-        self.mlp = MLP(x_size, h_sizes, 1)
+        self.mlp = MLP(x_size, [h_size] * n_hidden, 1)
 
     def forward(self, x, y, e, c, s):
         y_pred = self.mlp(x).view(-1)
@@ -56,10 +56,10 @@ class ERM_X(ERMBase):
 
 
 class ERM_ZC(ERMBase):
-    def __init__(self, z_size, h_sizes, lr):
+    def __init__(self, z_size, h_size, n_hidden, lr):
         super().__init__(lr)
         self.save_hyperparameters()
-        self.mlp = MLP(z_size, h_sizes, 1)
+        self.mlp = MLP(z_size, [h_size] * n_hidden, 1)
 
     def forward(self, z_c, y, e):
         y_pred = self.mlp(z_c).view(-1)
@@ -67,10 +67,10 @@ class ERM_ZC(ERMBase):
 
 
 class ERM_ZS(ERMBase):
-    def __init__(self, z_size, h_sizes, lr):
+    def __init__(self, z_size, h_size, n_hidden, lr):
         super().__init__(lr)
         self.save_hyperparameters()
-        self.mlp = MLP(z_size, h_sizes, 1)
+        self.mlp = MLP(z_size, [h_size] * n_hidden, 1)
 
     def forward(self, z, y, e):
         z_c, z_s = torch.chunk(z, 2, dim=1)
