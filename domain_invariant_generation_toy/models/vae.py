@@ -16,9 +16,9 @@ class Encoder(nn.Module):
         self.z_size = z_size
         self.rank = rank
         self.shared_features = MLP(x_size, [h_size] * n_hidden, h_size)
-        self.mu_causal = nn.Linear(h_size + N_ENVS, z_size)
-        self.low_rank_causal = nn.Linear(h_size + N_ENVS, z_size * rank)
-        self.diag_causal = nn.Linear(h_size + N_ENVS, z_size)
+        self.mu_causal = nn.Linear(h_size, z_size)
+        self.low_rank_causal = nn.Linear(h_size, z_size * rank)
+        self.diag_causal = nn.Linear(h_size, z_size)
         self.mu_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size)
         self.low_rank_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size * rank)
         self.diag_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size)
@@ -27,10 +27,10 @@ class Encoder(nn.Module):
         batch_size = len(x)
         hidden = self.shared_features(x)
         # Causal
-        mu_causal = self.mu_causal(torch.hstack((hidden, e_embed)))
-        low_rank_causal = self.low_rank_causal(torch.hstack((hidden, e_embed)))
+        mu_causal = self.mu_causal(hidden)
+        low_rank_causal = self.low_rank_causal(hidden)
         low_rank_causal = low_rank_causal.reshape(batch_size, self.z_size, self.rank)
-        diag_causal = self.diag_causal(torch.hstack((hidden, e_embed)))
+        diag_causal = self.diag_causal(hidden)
         cov_causal = arr_to_cov(low_rank_causal, diag_causal)
         # Spurious
         mu_spurious = self.mu_spurious(torch.hstack((hidden, y_embed, e_embed)))
