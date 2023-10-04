@@ -57,7 +57,7 @@ def make_model(args):
             return erm.ERM_ZS.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.VAE:
         return vae.VAE(args.task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_size, args.n_hidden, args.y_mult,
-            args.alpha, args.beta, args.reg_mult, args.weight_decay, args.lr, args.lr_infer, args.n_infer_steps)
+            args.alpha, args.reg_mult, args.weight_decay, args.lr, args.lr_infer, args.n_infer_steps)
     elif args.task == Task.Q_Z:
         return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
     else:
@@ -130,7 +130,6 @@ if __name__ == '__main__':
     parser.add_argument('--n_hidden', type=int, default=2)
     parser.add_argument('--y_mult', type=float, default=1)
     parser.add_argument('--alpha', type=float, default=1)
-    parser.add_argument('--beta', type=float, default=1)
     parser.add_argument('--reg_mult', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr', type=float, default=1e-3)
