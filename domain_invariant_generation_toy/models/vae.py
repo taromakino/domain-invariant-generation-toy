@@ -15,28 +15,29 @@ class Encoder(nn.Module):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
-        self.shared_features = MLP(x_size, [h_size] * n_hidden, h_size)
-        self.mu_causal = nn.Linear(h_size, z_size)
-        self.low_rank_causal = nn.Linear(h_size, z_size * rank)
-        self.diag_causal = nn.Linear(h_size, z_size)
-        self.mu_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size)
-        self.low_rank_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size * rank)
-        self.diag_spurious = nn.Linear(h_size + N_CLASSES + N_ENVS, z_size)
+        h_sizes = [h_size] * n_hidden
+        self.shared_features = MLP(x_size, h_sizes, h_size)
+        self.mu_causal = MLP(h_size + N_ENVS, h_sizes, z_size)
+        self.low_rank_causal = MLP(h_size + N_ENVS, h_sizes, z_size * rank)
+        self.diag_causal = MLP(h_size + N_ENVS, h_sizes, z_size)
+        self.mu_spurious = MLP(h_size + N_CLASSES + N_ENVS, h_sizes, z_size)
+        self.low_rank_spurious = MLP(h_size + N_CLASSES + N_ENVS, h_sizes, z_size * rank)
+        self.diag_spurious = MLP(h_size + N_CLASSES + N_ENVS, h_sizes, z_size)
 
     def forward(self, x, y_embed, e_embed):
         batch_size = len(x)
         hidden = self.shared_features(x)
         # Causal
-        mu_causal = self.mu_causal(hidden)
-        low_rank_causal = self.low_rank_causal(hidden)
+        mu_causal = self.mu_causal(hidden, e_embed)
+        low_rank_causal = self.low_rank_causal(hidden, e_embed)
         low_rank_causal = low_rank_causal.reshape(batch_size, self.z_size, self.rank)
-        diag_causal = self.diag_causal(hidden)
+        diag_causal = self.diag_causal(hidden, e_embed)
         cov_causal = arr_to_cov(low_rank_causal, diag_causal)
         # Spurious
-        mu_spurious = self.mu_spurious(torch.hstack((hidden, y_embed, e_embed)))
-        low_rank_spurious = self.low_rank_spurious(torch.hstack((hidden, y_embed, e_embed)))
+        mu_spurious = self.mu_spurious(hidden, y_embed, e_embed)
+        low_rank_spurious = self.low_rank_spurious(hidden, y_embed, e_embed)
         low_rank_spurious = low_rank_spurious.reshape(batch_size, self.z_size, self.rank)
-        diag_spurious = self.diag_spurious(torch.hstack((hidden, y_embed, e_embed)))
+        diag_spurious = self.diag_spurious(hidden, y_embed, e_embed)
         cov_spurious = arr_to_cov(low_rank_spurious, diag_spurious)
         # Block diagonal
         mu = torch.hstack((mu_causal, mu_spurious))
@@ -95,14 +96,15 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_size, n_hidden, y_mult, alpha, reg_mult, weight_decay, lr, lr_infer,
-            n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_size, n_hidden, y_mult, alpha, beta, reg_mult, weight_decay, lr,
+            lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
         self.y_mult = y_mult
         self.alpha = alpha
+        self.beta = beta
         self.reg_mult = reg_mult
         self.weight_decay = weight_decay
         self.lr = lr
@@ -133,7 +135,7 @@ class VAE(pl.LightningModule):
     def q_z(self):
         return D.MultivariateNormal(self.q_z_mu, covariance_matrix=torch.diag(self.q_z_var))
 
-    def vae_loss(self, x, y, e):
+    def loss(self, x, y, e):
         y_embed = self.y_embed(y)
         e_embed = self.e_embed(e)
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
@@ -149,19 +151,19 @@ class VAE(pl.LightningModule):
         prior_dist = self.prior(y_embed, e_embed)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         prior_norm = (prior_dist.loc ** 2).mean()
-        return log_prob_x_z, self.y_mult * log_prob_y_zc, kl, self.reg_mult * prior_norm
+        return log_prob_x_z, self.y_mult * log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.vae_loss(x, y, e)
+        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
         loss = -log_prob_x_z - log_prob_y_zc + kl + prior_norm
         return loss
 
     def validation_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.vae_loss(x, y, e)
+        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
         loss = -log_prob_x_z - log_prob_y_zc + kl + prior_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
