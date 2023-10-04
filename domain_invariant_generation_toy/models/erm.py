@@ -1,19 +1,23 @@
 import pytorch_lightning as pl
-import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.nn_utils import MLP
 
 
-class ERMBase(pl.LightningModule):
-    def __init__(self, lr):
+class ERM(pl.LightningModule):
+    def __init__(self, x_size, h_size, n_hidden, lr):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
+        self.mlp = MLP(x_size, [h_size] * n_hidden, 1)
         self.train_metric = Accuracy('binary')
         self.val_metric = Accuracy('binary')
         self.eval_metric = Accuracy('binary')
+
+    def forward(self, x, y, e, c, s):
+        y_pred = self.mlp(x).view(-1)
+        return y_pred, y
 
     def training_step(self, batch, batch_idx):
         y_pred, y = self(*batch)
@@ -42,38 +46,3 @@ class ERMBase(pl.LightningModule):
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr)
-
-
-class ERM_X(ERMBase):
-    def __init__(self, x_size, h_size, n_hidden, lr):
-        super().__init__(lr)
-        self.save_hyperparameters()
-        self.mlp = MLP(x_size, [h_size] * n_hidden, 1)
-
-    def forward(self, x, y, e, c, s):
-        y_pred = self.mlp(x).view(-1)
-        return y_pred, y
-
-
-class ERM_ZC(ERMBase):
-    def __init__(self, z_size, h_size, n_hidden, lr):
-        super().__init__(lr)
-        self.save_hyperparameters()
-        self.mlp = MLP(z_size, [h_size] * n_hidden, 1)
-
-    def forward(self, z, y, e):
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.mlp(z_c).view(-1)
-        return y_pred, y
-
-
-class ERM_ZS(ERMBase):
-    def __init__(self, z_size, h_size, n_hidden, lr):
-        super().__init__(lr)
-        self.save_hyperparameters()
-        self.mlp = MLP(z_size, [h_size] * n_hidden, 1)
-
-    def forward(self, z, y, e):
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.mlp(z_s).view(-1)
-        return y_pred, y
