@@ -35,7 +35,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x)
+        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
 
 
 class Prior(nn.Module):
@@ -119,7 +119,7 @@ class VAE(pl.LightningModule):
         posterior_dist = self.encoder(x, y_embed, e_embed)
         z = self.sample_z(posterior_dist)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-        log_prob_x_z = self.decoder(x, z)
+        log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x)[log p(y|z_c)]
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
@@ -167,7 +167,7 @@ class VAE(pl.LightningModule):
 
     def infer_loss(self, x, z, y_embed, e_embed):
         # log p(x|z_c,z_s)
-        log_prob_x_z = self.decoder(x, z)
+        log_prob_x_z = self.decoder(x, z).mean()
         z_c, z_s = torch.chunk(z, 2, dim=1)
         # log p(y|z_c)
         y = self.invert_y_embed(y_embed)
