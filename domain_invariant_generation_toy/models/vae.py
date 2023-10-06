@@ -154,7 +154,7 @@ class VAE(pl.LightningModule):
         y_embed = self.y_embed(y_embed).mean(dim=0)
         y_embed = torch.repeat_interleave(y_embed[None], batch_size, dim=0)
         y_embed_param = nn.Parameter(y_embed)
-        e_embed = torch.arange(self.e_size, device=self.device).long()
+        e_embed = torch.arange(N_ENVS, device=self.device).long()
         e_embed = self.e_embed(e_embed).mean(dim=0)
         e_embed = torch.repeat_interleave(e_embed[None], batch_size, dim=0)
         e_embed_param = nn.Parameter(e_embed)
