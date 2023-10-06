@@ -10,7 +10,7 @@ from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
-CNN_SIZE = 24
+CNN_SIZE = 864
 
 
 class DenseLayer(nn.Module):
@@ -78,7 +78,7 @@ class TransitionBlock(nn.Module):
 class CNN(nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
-        self.init_conv = nn.Conv2d(2, 24, 3, 2, 1)
+        self.init_conv = nn.Conv2d(2, 24, 3, 1, 1)
         self.BN1 = nn.BatchNorm2d(24)
         self.relu1 = nn.ReLU()
         self.db1 = DenseBlock(24, 8, 'encode')
@@ -88,7 +88,7 @@ class CNN(nn.Module):
         self.db3 = DenseBlock(24, 8, 'encode')
         self.BN2 = nn.BatchNorm2d(48)
         self.relu2 = nn.ReLU()
-        self.down_conv = nn.Conv2d(48, 24, 2, 2, 0)
+        self.down_conv = nn.Conv2d(48, 24, 2, 1, 0)
 
     def forward(self, x):
         init_conv = self.init_conv(x)
@@ -108,7 +108,7 @@ class CNN(nn.Module):
 class DCNN(nn.Module):
     def __init__(self):
         super(DCNN, self).__init__()
-        self.up_conv = nn.ConvTranspose2d(24, 24, 2, 2, 0)
+        self.up_conv = nn.ConvTranspose2d(24, 24, 2, 1, 0)
         self.db1 = DenseBlock(24, 8, 'decode')
         self.tb1 = TransitionBlock(48, 0.5, 'decode')
         self.db2 = DenseBlock(24, 8, 'decode')
@@ -116,10 +116,10 @@ class DCNN(nn.Module):
         self.db3 = DenseBlock(24, 8, 'decode')
         self.BN1 = nn.BatchNorm2d(48)
         self.relu1 = nn.ReLU()
-        self.de_conv = nn.ConvTranspose2d(48, 24, 2, 2, 0)
+        self.de_conv = nn.ConvTranspose2d(48, 24, 2, 1, 0)
         self.BN2 = nn.BatchNorm2d(24)
         self.relu2 = nn.ReLU()
-        self.out_conv = nn.ConvTranspose2d(24, 2, 2, 2, 2)
+        self.out_conv = nn.ConvTranspose2d(24, 2, 2, 1, 1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, z):
@@ -166,7 +166,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, z):
         batch_size = len(x)
-        x_pred = self.mlp(z).view(batch_size, 24, 1, 1)
+        x_pred = self.mlp(z).view(batch_size, 24, 6, 6)
         x_pred = self.dcnn(x_pred).view(batch_size, -1)
         return -F.binary_cross_entropy_with_logits(x_pred, x.view(batch_size, -1), reduction='none').sum(dim=1)
 
