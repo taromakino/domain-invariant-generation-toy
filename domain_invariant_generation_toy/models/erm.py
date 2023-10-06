@@ -7,10 +7,11 @@ from utils.nn_utils import MLP
 
 
 class ERMBase(pl.LightningModule):
-    def __init__(self, lr):
+    def __init__(self, lr, weight_decay):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
+        self.weight_decay = weight_decay
         self.train_metric = Accuracy('binary')
         self.val_metric = Accuracy('binary')
         self.eval_metric = Accuracy('binary')
@@ -41,12 +42,12 @@ class ERMBase(pl.LightningModule):
         self.log('eval_metric', self.eval_metric.compute())
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr)
+        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 
 class ERM_X(ERMBase):
-    def __init__(self, x_size, h_sizes, lr):
-        super().__init__(lr)
+    def __init__(self, x_size, h_sizes, lr, weight_decay):
+        super().__init__(lr, weight_decay)
         self.save_hyperparameters()
         self.mlp = MLP(x_size, h_sizes, 1)
 
@@ -56,8 +57,8 @@ class ERM_X(ERMBase):
 
 
 class ERM_ZC(ERMBase):
-    def __init__(self, z_size, h_sizes, lr):
-        super().__init__(lr)
+    def __init__(self, z_size, h_sizes, lr, weight_decay):
+        super().__init__(lr, weight_decay)
         self.save_hyperparameters()
         self.mlp = MLP(z_size, h_sizes, 1)
 
@@ -68,8 +69,8 @@ class ERM_ZC(ERMBase):
 
 
 class ERM_ZS(ERMBase):
-    def __init__(self, z_size, h_sizes, lr):
-        super().__init__(lr)
+    def __init__(self, z_size, h_sizes, lr, weight_decay):
+        super().__init__(lr, weight_decay)
         self.save_hyperparameters()
         self.mlp = MLP(z_size, h_sizes, 1)
 
