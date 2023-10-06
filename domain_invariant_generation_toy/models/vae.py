@@ -4,7 +4,6 @@ import torch
 import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import Accuracy
 from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from utils.enums import Task
@@ -12,11 +11,10 @@ from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
 class Encoder(nn.Module):
-    def __init__(self, x_size, z_size, rank, h_size, n_hidden):
+    def __init__(self, x_size, z_size, rank, h_sizes):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
-        h_sizes = [h_size] * n_hidden
         self.mu = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
         self.low_rank = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size * rank)
         self.diag = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
@@ -31,21 +29,20 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, x_size, z_size, h_size, n_hidden):
+    def __init__(self, x_size, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, [h_size] * n_hidden, x_size)
+        self.mlp = MLP(2 * z_size, h_sizes, x_size)
 
     def forward(self, x, z):
         x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        return -F.binary_cross_entropy_with_logits(x_pred, x)
 
 
 class Prior(nn.Module):
-    def __init__(self, z_size, rank, h_size, n_hidden):
+    def __init__(self, z_size, rank, h_sizes):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
-        h_sizes = [h_size] * n_hidden
         # p(z_c|e)
         self.mu_causal = MLP(N_CLASSES, h_sizes, z_size)
         self.low_rank_causal = MLP(N_CLASSES, h_sizes, z_size * rank)
@@ -78,34 +75,33 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_size, n_hidden, y_mult, alpha, reg_mult, weight_decay, lr,
-            lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, lr, reg_mult, weight_decay, alpha, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
-        self.y_mult = y_mult
-        self.alpha = alpha
+        self.beta = beta
+        self.lr = lr
         self.reg_mult = reg_mult
         self.weight_decay = weight_decay
-        self.lr = lr
+        self.alpha = alpha
         self.lr_infer = lr_infer
         self.n_infer_steps = n_infer_steps
         self.y_embed = nn.Embedding(N_CLASSES, N_CLASSES)
         self.e_embed = nn.Embedding(N_ENVS, N_ENVS)
         # q(z_c|x,y,e)
-        self.encoder = Encoder(x_size, z_size, rank, h_size, n_hidden)
+        self.encoder = Encoder(x_size, z_size, rank, h_sizes)
         # p(x|z_c,z_s)
-        self.decoder = Decoder(x_size, z_size, h_size, n_hidden)
+        self.decoder = Decoder(x_size, z_size, h_sizes)
         # p(z_c,z_s|y,e)
-        self.prior = Prior(z_size, rank, h_size, n_hidden)
+        self.prior = Prior(z_size, rank, h_sizes)
         # p(y|z_c)
-        self.classifier = MLP(z_size, [h_size] * n_hidden, 1)
+        self.classifier = MLP(z_size, h_sizes, 1)
         # q(z)
         self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.z_sample = []
-        self.eval_metric = Accuracy('binary')
+        self.z_infer, self.y, self.e = [], [], []
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -123,7 +119,7 @@ class VAE(pl.LightningModule):
         posterior_dist = self.encoder(x, y_embed, e_embed)
         z = self.sample_z(posterior_dist)
         # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
-        log_prob_x_z = self.decoder(x, z).mean()
+        log_prob_x_z = self.decoder(x, z)
         # E_q(z_c|x)[log p(y|z_c)]
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
@@ -132,7 +128,7 @@ class VAE(pl.LightningModule):
         prior_dist = self.prior(y_embed, e_embed)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         prior_norm = (prior_dist.loc ** 2).mean()
-        return log_prob_x_z, self.y_mult * log_prob_y_zc, kl, self.reg_mult * prior_norm
+        return log_prob_x_z, log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
@@ -154,49 +150,51 @@ class VAE(pl.LightningModule):
 
     def make_infer_params(self, batch_size):
         z_param = nn.Parameter(torch.repeat_interleave(self.q_z().loc[None], batch_size, dim=0))
-        e_embed = torch.arange(N_ENVS, device=self.device).long()
+        y_embed = torch.arange(N_CLASSES, device=self.device).long()
+        y_embed = self.y_embed(y_embed).mean(dim=0)
+        y_embed = torch.repeat_interleave(y_embed[None], batch_size, dim=0)
+        y_embed_param = nn.Parameter(y_embed)
+        e_embed = torch.arange(self.e_size, device=self.device).long()
         e_embed = self.e_embed(e_embed).mean(dim=0)
         e_embed = torch.repeat_interleave(e_embed[None], batch_size, dim=0)
         e_embed_param = nn.Parameter(e_embed)
-        return z_param, e_embed_param
+        return z_param, y_embed_param, e_embed_param
 
-    def e_invariant_loss(self, x, z, e_embed):
+    def invert_y_embed(self, y_embed):
+        y_embed = torch.repeat_interleave(y_embed[:, None, :], N_CLASSES, dim=1)
+        distance = torch.norm(y_embed - self.y_embed.weight.data[None], dim=2)
+        return distance.argmin(dim=1)
+
+    def infer_loss(self, x, z, y_embed, e_embed):
         # log p(x|z_c,z_s)
-        log_prob_x_z = self.decoder(x, z).mean()
+        log_prob_x_z = self.decoder(x, z)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         # log p(y|z_c)
-        y_pred = self.classifier(z_c)
-        prob_y_pos_zc = torch.sigmoid(y_pred)
-        prob_y_neg_zc = 1 - prob_y_pos_zc
-        prob_y_zc = torch.hstack((prob_y_pos_zc, prob_y_neg_zc))
-        prob_y_zc_max = prob_y_zc.max(dim=1)
-        y = prob_y_zc_max.indices
-        prob_y_zc = prob_y_zc_max.values
-        log_prob_y_zc = torch.log(prob_y_zc).mean()
-        # log p(z_c|e) + log p(z_s|y,e)
-        y_embed = self.y_embed(y)
+        y = self.invert_y_embed(y_embed)
+        y_pred = self.classifier(z_c).view(-1)
+        log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float())
+        # log p(z|y,e)
         prior_dist = self.prior(y_embed, e_embed)
         log_prob_z_ye = prior_dist.log_prob(z).mean()
-        # log p(z_s|y,e)
-        return log_prob_x_z, self.y_mult * log_prob_y_zc, self.alpha * log_prob_z_ye
+        return z, log_prob_x_z, log_prob_y_zc, self.alpha * log_prob_z_ye
 
     def infer_z(self, x):
-        z_param, e_embed_param = self.make_infer_params(len(x))
-        optim = Adam([z_param, e_embed_param], lr=self.lr_infer)
+        z_param, y_embed_param, e_embed_param = self.make_infer_params(len(x))
+        optim = Adam([z_param, y_embed_param, e_embed_param], lr=self.lr_infer)
         optim_loss = torch.inf
-        optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z_ye = optim_z = None
+        optim_z = optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z_ye = None
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
-            log_prob_x_z, log_prob_y_zc, log_prob_z_ye = self.e_invariant_loss(x, z_param, e_embed_param)
+            z, log_prob_x_z, log_prob_y_zc, log_prob_z_ye = self.infer_loss(x, z_param, y_embed_param, e_embed_param)
             loss = -log_prob_x_z - log_prob_y_zc - log_prob_z_ye
             loss.backward()
             optim.step()
             if loss < optim_loss:
-                optim_loss = loss
+                optim_z = z_param.clone()
                 optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
                 optim_log_prob_z_ye = log_prob_z_ye
-                optim_z = z_param.clone()
+                optim_loss = loss
         return optim_z, optim_log_prob_x_z, optim_log_prob_y_zc, optim_log_prob_z_ye, optim_loss
 
     def test_step(self, batch, batch_idx):
@@ -207,16 +205,16 @@ class VAE(pl.LightningModule):
             z = self.encoder(x, y_embed, e_embed).loc
             self.z_sample.append(z.detach().cpu())
         else:
-            assert self.task == Task.CLASSIFY
+            assert self.task == Task.INFER_Z
             with torch.set_grad_enabled(True):
                 z, log_prob_x_z, log_prob_y_zc, log_prob_z_ye, loss = self.infer_z(x)
-                z_c, z_s = torch.chunk(z, 2, dim=1)
-                y_pred = self.classifier(z_c).view(-1)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
                 self.log('log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
                 self.log('log_prob_z_ye', log_prob_z_ye, on_step=False, on_epoch=True)
                 self.log('loss', loss, on_step=False, on_epoch=True)
-                self.eval_metric.update(y_pred, y)
+                self.z_infer.append(z.detach().cpu())
+                self.y.append(y.cpu())
+                self.e.append(e.cpu())
 
     def on_test_epoch_end(self):
         if self.task == Task.Q_Z:
@@ -224,8 +222,11 @@ class VAE(pl.LightningModule):
             self.q_z_mu.data = torch.mean(z, 0)
             self.q_z_var.data = torch.var(z, 0)
         else:
-            assert self.task == Task.CLASSIFY
-            self.log('eval_metric', self.eval_metric.compute())
+            assert self.task == Task.INFER_Z
+            z = torch.cat(self.z_infer)
+            y = torch.cat(self.y)
+            e = torch.cat(self.e)
+            torch.save((z, y, e), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}', 'infer_z.pt'))
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
