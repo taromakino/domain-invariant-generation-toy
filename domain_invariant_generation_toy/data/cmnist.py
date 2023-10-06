@@ -48,11 +48,10 @@ def make_trainval_data():
     colors[idxs_y1_e1] = RNG.normal(0.4, 0.05, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
-    images = torch.stack([images, images], dim=1)
-    images = images / 255
-    images[:, 0, :, :] *= colors
-    images[:, 1, :, :] *= (1 - colors)
-    x = images.flatten(start_dim=1)
+    x = torch.stack([images, images], dim=1)
+    x = x / 255
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
 
     y = y.long()
     e = e
@@ -71,11 +70,10 @@ def make_test_data(batch_size):
 
     colors = RNG.rand(n_total)[:, None, None]
 
-    images = torch.stack([images, images], dim=1)
-    images = images / 255
-    images[:, 0, :, :] *= colors
-    images[:, 1, :, :] *= (1 - colors)
-    x = images.flatten(start_dim=1)
+    x = torch.stack([images, images], dim=1)
+    x = x / 255
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
 
     y = y.long()
     e = torch.full_like(y, np.nan, dtype=torch.float32)

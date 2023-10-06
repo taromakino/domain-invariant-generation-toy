@@ -5,37 +5,170 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
-from torch.optim import Adam
+from torch.optim import SGD
 from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
+CNN_SIZE = 24
+
+
+class DenseLayer(nn.Module):
+    def __init__(self, in_channels, growth_rate, mode='encode'):
+        assert mode in ['encode', 'decode'], "Mode must be either 'encode' or 'decode'."
+        super(DenseLayer, self).__init__()
+        self.BN1 = nn.BatchNorm2d(in_channels)
+        self.relu1 = nn.ReLU()
+        if mode == 'encode':
+            self.conv1 = nn.Conv2d(in_channels, 4 * growth_rate, 1, 1, 0)
+            self.conv2 = nn.Conv2d(4 * growth_rate, growth_rate, 3, 1, 1)
+        elif mode == 'decode':
+            self.conv1 = nn.ConvTranspose2d(in_channels, 4 * growth_rate, 1, 1, 0)
+            self.conv2 = nn.ConvTranspose2d(4 * growth_rate, growth_rate, 3, 1, 1)
+        self.BN2 = nn.BatchNorm2d(4 * growth_rate)
+        self.relu2 = nn.ReLU()
+
+    def forward(self, x):
+        bn1 = self.BN1(x)
+        relu1 = self.relu1(bn1)
+        conv1 = self.conv1(relu1)
+        bn2 = self.BN2(conv1)
+        relu2 = self.relu2(bn2)
+        conv2 = self.conv2(relu2)
+        return torch.cat([x, conv2], dim=1)
+
+
+class DenseBlock(nn.Module):
+    def __init__(self, in_channels, growth_rate, mode='encode'):
+        assert mode in ['encode', 'decode'], "Mode must be either 'encode' or 'decode'."
+        super(DenseBlock, self).__init__()
+        self.DL1 = DenseLayer(in_channels + (growth_rate * 0), growth_rate, mode)
+        self.DL2 = DenseLayer(in_channels + (growth_rate * 1), growth_rate, mode)
+        self.DL3 = DenseLayer(in_channels + (growth_rate * 2), growth_rate, mode)
+
+    def forward(self, x):
+        DL1 = self.DL1(x)
+        DL2 = self.DL2(DL1)
+        DL3 = self.DL3(DL2)
+        return DL3
+
+
+class TransitionBlock(nn.Module):
+    def __init__(self, in_channels, c_rate, mode='encode'):
+        assert mode in ['encode', 'decode'], "Mode must be either 'encode' or 'decode'."
+        super(TransitionBlock, self).__init__()
+        out_channels = int(c_rate * in_channels)
+        self.BN = nn.BatchNorm2d(in_channels)
+        self.relu = nn.ReLU()
+        if mode == 'encode':
+            self.conv = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
+            self.resize_layer = nn.AvgPool2d(2, 2)
+        elif mode == 'decode':
+            self.conv = nn.ConvTranspose2d(in_channels, out_channels, 1, 1, 0)
+            self.resize_layer = nn.ConvTranspose2d(out_channels, out_channels, 2, 2, 0)
+
+    def forward(self, x):
+        bn = self.BN(x)
+        relu = self.relu(bn)
+        conv = self.conv(relu)
+        output = self.resize_layer(conv)
+        return output
+
+
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.init_conv = nn.Conv2d(2, 24, 3, 2, 1)
+        self.BN1 = nn.BatchNorm2d(24)
+        self.relu1 = nn.ReLU()
+        self.db1 = DenseBlock(24, 8, 'encode')
+        self.tb1 = TransitionBlock(48, 0.5, 'encode')
+        self.db2 = DenseBlock(24, 8, 'encode')
+        self.tb2 = TransitionBlock(48, 0.5, 'encode')
+        self.db3 = DenseBlock(24, 8, 'encode')
+        self.BN2 = nn.BatchNorm2d(48)
+        self.relu2 = nn.ReLU()
+        self.down_conv = nn.Conv2d(48, 24, 2, 2, 0)
+
+    def forward(self, x):
+        init_conv = self.init_conv(x)
+        bn1 = self.BN1(init_conv)
+        relu1 = self.relu1(bn1)
+        db1 = self.db1(relu1)
+        tb1 = self.tb1(db1)
+        db2 = self.db2(tb1)
+        tb2 = self.tb2(db2)
+        db3 = self.db3(tb2)
+        bn2 = self.BN2(db3)
+        relu2 = self.relu2(bn2)
+        down_conv = self.down_conv(relu2)
+        return down_conv
+
+
+class DCNN(nn.Module):
+    def __init__(self):
+        super(DCNN, self).__init__()
+        self.up_conv = nn.ConvTranspose2d(24, 24, 2, 2, 0)
+        self.db1 = DenseBlock(24, 8, 'decode')
+        self.tb1 = TransitionBlock(48, 0.5, 'decode')
+        self.db2 = DenseBlock(24, 8, 'decode')
+        self.tb2 = TransitionBlock(48, 0.5, 'decode')
+        self.db3 = DenseBlock(24, 8, 'decode')
+        self.BN1 = nn.BatchNorm2d(48)
+        self.relu1 = nn.ReLU()
+        self.de_conv = nn.ConvTranspose2d(48, 24, 2, 2, 0)
+        self.BN2 = nn.BatchNorm2d(24)
+        self.relu2 = nn.ReLU()
+        self.out_conv = nn.ConvTranspose2d(24, 2, 2, 2, 2)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, z):
+        up_conv = self.up_conv(z)
+        db1 = self.db1(up_conv)
+        tb1 = self.tb1(db1)
+        db2 = self.db2(tb1)
+        tb2 = self.tb2(db2)
+        db3 = self.db3(tb2)
+        bn1 = self.BN1(db3)
+        relu1 = self.relu1(bn1)
+        de_conv = self.de_conv(relu1)
+        bn2 = self.BN2(de_conv)
+        relu2 = self.relu2(bn2)
+        output = self.out_conv(relu2)
+        return output
+
+
 class Encoder(nn.Module):
-    def __init__(self, x_size, z_size, rank, h_sizes):
+    def __init__(self, z_size, rank, h_sizes):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
-        self.mu = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
-        self.low_rank = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size * rank)
-        self.diag = MLP(x_size + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
+        self.cnn = CNN()
+        self.mu = MLP(CNN_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
+        self.low_rank = MLP(CNN_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size * rank)
+        self.diag = MLP(CNN_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
 
-    def forward(self, x, y_embed, e_embed):
+    def forward(self, x, y_one_hot, e_embed):
         batch_size = len(x)
-        mu = self.mu(x, y_embed, e_embed)
-        low_rank = self.low_rank(x, y_embed, e_embed)
+        x = self.cnn(x).view(batch_size, -1)
+        mu = self.mu(x, y_one_hot, e_embed)
+        low_rank = self.low_rank(x, y_one_hot, e_embed)
         low_rank = low_rank.reshape(batch_size, 2 * self.z_size, self.rank)
-        diag = self.diag(x, y_embed, e_embed)
+        diag = self.diag(x, y_one_hot, e_embed)
         return D.MultivariateNormal(mu, scale_tril=arr_to_tril(low_rank, diag))
 
 
 class Decoder(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes):
+    def __init__(self, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, h_sizes, x_size)
+        self.mlp = MLP(2 * z_size, h_sizes, CNN_SIZE)
+        self.dcnn = DCNN()
 
     def forward(self, x, z):
-        x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        batch_size = len(x)
+        x_pred = self.mlp(z).view(batch_size, 24, 1, 1)
+        x_pred = self.dcnn(x_pred).view(batch_size, -1)
+        return -F.binary_cross_entropy_with_logits(x_pred, x.view(batch_size, -1), reduction='none').sum(dim=1)
 
 
 class Prior(nn.Module):
@@ -44,9 +177,9 @@ class Prior(nn.Module):
         self.z_size = z_size
         self.rank = rank
         # p(z_c|e)
-        self.mu_causal = MLP(N_CLASSES, h_sizes, z_size)
-        self.low_rank_causal = MLP(N_CLASSES, h_sizes, z_size * rank)
-        self.diag_causal = MLP(N_CLASSES, h_sizes, z_size)
+        self.mu_causal = MLP(N_ENVS, h_sizes, z_size)
+        self.low_rank_causal = MLP(N_ENVS, h_sizes, z_size * rank)
+        self.diag_causal = MLP(N_ENVS, h_sizes, z_size)
         # p(z_s|y,e)
         self.mu_spurious = MLP(N_CLASSES + N_ENVS, h_sizes, z_size)
         self.low_rank_spurious = MLP(N_CLASSES + N_ENVS, h_sizes, z_size * rank)
@@ -75,27 +208,28 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, lr, reg_mult, weight_decay, alpha, lr_infer, n_infer_steps):
+    def __init__(self, task, z_size, rank, h_sizes, beta, reg_mult, lr, momentum, weight_decay, alpha, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
         self.beta = beta
-        self.lr = lr
         self.reg_mult = reg_mult
+        self.lr = lr
+        self.momentum = momentum
         self.weight_decay = weight_decay
         self.alpha = alpha
         self.lr_infer = lr_infer
         self.n_infer_steps = n_infer_steps
         self.y_embed = nn.Embedding(N_CLASSES, N_CLASSES)
         self.e_embed = nn.Embedding(N_ENVS, N_ENVS)
-        # q(z_c|x,y,e)
-        self.encoder = Encoder(x_size, z_size, rank, h_sizes)
-        # p(x|z_c,z_s)
-        self.decoder = Decoder(x_size, z_size, h_sizes)
+        # q(z_c,z_s|x)
+        self.encoder = Encoder(z_size, rank, h_sizes)
+        # p(x|z_c, z_s)
+        self.decoder = Decoder(z_size, h_sizes)
         # p(z_c,z_s|y,e)
         self.prior = Prior(z_size, rank, h_sizes)
-        # p(y|z_c)
+        # p(y|z)
         self.classifier = MLP(z_size, h_sizes, 1)
         # q(z)
         self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
@@ -115,13 +249,13 @@ class VAE(pl.LightningModule):
     def loss(self, x, y, e):
         y_embed = self.y_embed(y)
         e_embed = self.e_embed(e)
-        # z_c,z_s ~ q(z_c,z_s|x,y,e)
+        # z_c,z_s ~ q(z_c,z_s|x)
         posterior_dist = self.encoder(x, y_embed, e_embed)
         z = self.sample_z(posterior_dist)
-        # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
+        z_c, z_s = torch.chunk(z, 2, dim=1)
+        # E_q(z_c,z_s|x)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x)[log p(y|z_c)]
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float())
         # KL(q(z_c,z_s|x) || p(z_c|e)p(z_s|y,e))
@@ -154,7 +288,7 @@ class VAE(pl.LightningModule):
         y_embed = self.y_embed(y_embed).mean(dim=0)
         y_embed = torch.repeat_interleave(y_embed[None], batch_size, dim=0)
         y_embed_param = nn.Parameter(y_embed)
-        e_embed = torch.arange(self.e_size, device=self.device).long()
+        e_embed = torch.arange(N_ENVS, device=self.device).long()
         e_embed = self.e_embed(e_embed).mean(dim=0)
         e_embed = torch.repeat_interleave(e_embed[None], batch_size, dim=0)
         e_embed_param = nn.Parameter(e_embed)
@@ -166,9 +300,9 @@ class VAE(pl.LightningModule):
         return distance.argmin(dim=1)
 
     def infer_loss(self, x, z, y_embed, e_embed):
+        z_c, z_s = torch.chunk(z, 2, dim=1)
         # log p(x|z_c,z_s)
         log_prob_x_z = self.decoder(x, z).mean()
-        z_c, z_s = torch.chunk(z, 2, dim=1)
         # log p(y|z_c)
         y = self.invert_y_embed(y_embed)
         y_pred = self.classifier(z_c).view(-1)
@@ -180,7 +314,7 @@ class VAE(pl.LightningModule):
 
     def infer_z(self, x):
         z_param, y_embed_param, e_embed_param = self.make_infer_params(len(x))
-        optim = Adam([z_param, y_embed_param, e_embed_param], lr=self.lr_infer)
+        optim = SGD([z_param, y_embed_param, e_embed_param], lr=self.lr_infer)
         optim_loss = torch.inf
         optim_z = optim_log_prob_x_z = optim_log_prob_y_zc = optim_log_prob_z_ye = None
         for _ in range(self.n_infer_steps):
@@ -190,7 +324,7 @@ class VAE(pl.LightningModule):
             loss.backward()
             optim.step()
             if loss < optim_loss:
-                optim_z = z_param.clone()
+                optim_z = z.clone()
                 optim_log_prob_x_z = log_prob_x_z
                 optim_log_prob_y_zc = log_prob_y_zc
                 optim_log_prob_z_ye = log_prob_z_ye
@@ -206,6 +340,8 @@ class VAE(pl.LightningModule):
             self.z_sample.append(z.detach().cpu())
         else:
             assert self.task == Task.INFER_Z
+            self.encoder.gru.train()
+            self.decoder.gru.train()
             with torch.set_grad_enabled(True):
                 z, log_prob_x_z, log_prob_y_zc, log_prob_z_ye, loss = self.infer_z(x)
                 self.log('log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
@@ -229,4 +365,4 @@ class VAE(pl.LightningModule):
             torch.save((z, y, e), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}', 'infer_z.pt'))
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        return SGD(self.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
