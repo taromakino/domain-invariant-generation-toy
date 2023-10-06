@@ -56,8 +56,8 @@ def make_model(args):
         else:
             return erm.ERM_ZS.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.VAE:
-        return vae.VAE(args.task, args.z_size, args.rank, args.h_sizes, args.beta, args.reg_mult, args.lr,
-            args.weight_decay, args.alpha, args.lr_infer, args.n_infer_steps)
+        return vae.VAE(args.task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_sizes, args.beta, args.lr,
+            args.reg_mult, args.weight_decay, args.alpha, args.lr_infer, args.n_infer_steps)
     elif args.task == Task.Q_Z:
         return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=args.task)
     else:
