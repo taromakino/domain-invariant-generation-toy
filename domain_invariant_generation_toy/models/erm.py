@@ -62,7 +62,7 @@ class ERM_ZC(ERMBase):
         self.save_hyperparameters()
         self.mlp = MLP(z_size, h_sizes, 1)
 
-    def forward(self, z, y, e):
+    def forward(self, x, y, z):
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.mlp(z_c).view(-1)
         return y_pred, y
@@ -74,7 +74,7 @@ class ERM_ZS(ERMBase):
         self.save_hyperparameters()
         self.mlp = MLP(z_size, h_sizes, 1)
 
-    def forward(self, z, y, e):
+    def forward(self, x, y, z):
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.mlp(z_s).view(-1)
         return y_pred, y
