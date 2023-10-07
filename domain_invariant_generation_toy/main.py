@@ -24,7 +24,7 @@ def make_data(args):
         data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, EvalStage.TEST.value,
             f'version_{args.seed}', 'infer.pt')), args.batch_size, False)
     else:
-        data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
+        data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_debug_examples)
     if args.eval_stage == EvalStage.TRAIN:
         data_eval = data_train
     elif args.eval_stage == EvalStage.VAL:
