@@ -124,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--is_train', action='store_true')
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--n_debug_examples', type=int)
     parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
