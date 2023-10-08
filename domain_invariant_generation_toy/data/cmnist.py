@@ -21,8 +21,10 @@ def flip_binary(x, flip_prob):
 def make_trainval_data():
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=True, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
-    images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
-    n_total = len(images)
+    x, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
+    n_trainval = len(x)
+
+    y = flip_binary(digits.clone(), 0.25)
 
     idxs_env0 = []
     zero_idxs = np.where(digits == 0)[0]
@@ -30,14 +32,12 @@ def make_trainval_data():
     idxs_env0.append(RNG.choice(zero_idxs, size=int(PROB_ZERO_E0 * len(zero_idxs))))
     idxs_env0.append(RNG.choice(one_idxs, size=int((1 - PROB_ZERO_E0) * len(one_idxs))))
     idxs_env0 = np.concatenate(idxs_env0)
-    idxs_env1 = np.setdiff1d(np.arange(n_total), idxs_env0)
+    idxs_env1 = np.setdiff1d(np.arange(n_trainval), idxs_env0)
 
-    e = torch.zeros(n_total, dtype=torch.long)
+    e = torch.zeros(n_trainval, dtype=torch.long)
     e[idxs_env1] = 1
 
-    y = flip_binary(digits.clone(), 0.25)
-
-    colors = np.full(n_total, np.nan)
+    colors = np.full(n_trainval, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
@@ -48,11 +48,11 @@ def make_trainval_data():
     colors[idxs_y1_e1] = RNG.normal(0.4, 0.1, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
-    images = torch.stack([images, images], dim=1)
-    images = images / 255
-    images[:, 0, :, :] *= colors
-    images[:, 1, :, :] *= (1 - colors)
-    x = images.flatten(start_dim=1)
+    x = torch.stack([x, x], dim=1)
+    x = x / 255
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
+    x = x.flatten(start_dim=1)
 
     y = y.long()
     e = e
@@ -64,18 +64,18 @@ def make_trainval_data():
 def make_test_data():
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=False, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
-    images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
-    n_total = len(images)
+    x, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
+    n_total = len(x)
 
     y = flip_binary(digits.clone(), 0.25)
 
     colors = RNG.rand(n_total)[:, None, None]
 
-    images = torch.stack([images, images], dim=1)
-    images = images / 255
-    images[:, 0, :, :] *= colors
-    images[:, 1, :, :] *= (1 - colors)
-    x = images.flatten(start_dim=1)
+    x = torch.stack([x, x], dim=1)
+    x = x / 255
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
+    x = x.flatten(start_dim=1)
 
     y = y.long()
     e = torch.full_like(y, np.nan, dtype=torch.float32)
@@ -120,10 +120,10 @@ def main():
     fig.suptitle('Should be Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-    axes[0].hist(colors[(y == 0) & (e == 0)])
-    axes[1].hist(colors[(y == 0) & (e == 1)])
-    axes[2].hist(colors[(y == 1) & (e == 0)])
-    axes[3].hist(colors[(y == 1) & (e == 1)])
+    axes[0].hist(colors[(y == 0) & (e == 0)], bins='auto')
+    axes[1].hist(colors[(y == 0) & (e == 1)], bins='auto')
+    axes[2].hist(colors[(y == 1) & (e == 0)], bins='auto')
+    axes[3].hist(colors[(y == 1) & (e == 1)], bins='auto')
     axes[0].set_title('p(color|y=0,e=0)')
     axes[1].set_title('p(color|y=0,e=1)')
     axes[2].set_title('p(color|y=1,e=0)')

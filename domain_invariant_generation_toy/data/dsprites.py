@@ -3,103 +3,119 @@ import numpy as np
 import torch
 from utils.nn_utils import make_dataloader
 from utils.plot import hist_discrete
-from utils.stats import min_max_scale
 
 
 RNG = np.random.RandomState(0)
+PROB_ZERO_E0 = 0.25
 N_TRAINVAL = 10000
 N_TEST = 2000
-WIDTH_LB = 8
-WIDTH_UB = 32
-IMAGE_SIZE = 64
-X_SIZE = IMAGE_SIZE ** 2
+WIDTH_SMALL = 4
+WIDTH_LARGE = 8
+IMAGE_SIZE = 28
+X_SIZE = 2 * IMAGE_SIZE ** 2
+
+
+def flip_binary(x, flip_prob):
+    idxs = np.arange(len(x))
+    flip_idxs = RNG.choice(idxs, size=int(flip_prob * len(idxs)), replace=False)
+    x[flip_idxs] = 1 - x[flip_idxs]
+    return x
 
 
 def make_trainval_data():
-    idxs_env0 = RNG.choice(np.arange(N_TRAINVAL), N_TRAINVAL // 2, replace=False)
+    scale = RNG.randint(0, 2, N_TRAINVAL)
+
+    y = flip_binary(scale.copy(), 0.25)
+
+    idxs_env0 = []
+    zero_idxs = np.where(scale == 0)[0]
+    one_idxs = np.where(scale == 1)[0]
+    idxs_env0.append(RNG.choice(zero_idxs, size=int(PROB_ZERO_E0 * len(zero_idxs))))
+    idxs_env0.append(RNG.choice(one_idxs, size=int((1 - PROB_ZERO_E0) * len(one_idxs))))
+    idxs_env0 = np.concatenate(idxs_env0)
     idxs_env1 = np.setdiff1d(np.arange(N_TRAINVAL), idxs_env0)
 
-    e = np.zeros(N_TRAINVAL)
+    e = np.zeros(N_TRAINVAL, dtype='long')
     e[idxs_env1] = 1
 
-    width = np.full(N_TRAINVAL, np.nan)
-    width[idxs_env0] = (RNG.normal(22, 6, len(idxs_env1))).astype(int)
-    width[idxs_env1] = (RNG.normal(18, 6, len(idxs_env0))).astype(int)
-    width = np.clip(width, WIDTH_LB, WIDTH_UB)
-
-    y = min_max_scale(width)
-    y = RNG.binomial(1, y, len(y))
-
-    brightness = np.full(N_TRAINVAL, np.nan)
+    colors = np.full(N_TRAINVAL, np.nan)
     idxs_y0_e0 = np.where((y == 0) & (e == 0))[0]
-    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
+    idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    brightness[idxs_y0_e0] = RNG.normal(0.2, 0.05, len(idxs_y0_e0))
-    brightness[idxs_y1_e0] = RNG.normal(0.8, 0.05, len(idxs_y1_e0))
-    brightness[idxs_y0_e1] = RNG.normal(0.8, 0.05, len(idxs_y0_e1))
-    brightness[idxs_y1_e1] = RNG.normal(0.2, 0.05, len(idxs_y1_e1))
-    brightness = np.clip(brightness, 0, 1)
+    colors[idxs_y0_e0] = RNG.normal(0.2, 0.1, len(idxs_y0_e0))
+    colors[idxs_y1_e0] = RNG.normal(0.6, 0.1, len(idxs_y1_e0))
+    colors[idxs_y0_e1] = RNG.normal(0.8, 0.1, len(idxs_y0_e1))
+    colors[idxs_y1_e1] = RNG.normal(0.4, 0.1, len(idxs_y1_e1))
+    colors = np.clip(colors, 0, 1)[:, None, None]
 
-    center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
-    center_y = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
+    center_x = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
+    center_y = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
 
     x = np.zeros((N_TRAINVAL, IMAGE_SIZE, IMAGE_SIZE))
     for idx in range(N_TRAINVAL):
-        half_width_floor = np.floor(width[idx] / 2)
-        half_width_ceil = np.ceil(width[idx] / 2)
+        width = WIDTH_SMALL if scale[idx] == 0 else WIDTH_LARGE
+        half_width_floor = np.floor(width / 2)
+        half_width_ceil = np.ceil(width / 2)
         x_lb = int(center_x[idx] - half_width_floor)
         x_ub = int(center_x[idx] + half_width_ceil)
         y_lb = int(center_y[idx] - half_width_floor)
         y_ub = int(center_y[idx] + half_width_ceil)
-        x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
-    x = x.reshape(len(x), -1)
+        x[idx, x_lb:x_ub, y_lb:y_ub] = 1
 
+    x = np.stack([x, x], axis=1)
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
     x = torch.tensor(x, dtype=torch.float32)
+    x = x.flatten(start_dim=1)
+
     y = torch.tensor(y, dtype=torch.long)
     e = torch.tensor(e, dtype=torch.long)
-    c = torch.tensor(width, dtype=torch.float32)
-    s = torch.tensor(brightness, dtype=torch.float32)
+    c = torch.tensor(scale, dtype=torch.float32)
+    s = torch.tensor(colors.squeeze(), dtype=torch.float32)
     return x, y, e, c, s
 
 
-def make_test_data(batch_size):
-    idxs_lhs = RNG.choice(np.arange(N_TEST), N_TEST // 2, replace=False)
-    idxs_rhs = np.setdiff1d(np.arange(N_TEST), idxs_lhs)
+def make_test_data():
+    scale = RNG.randint(0, 2, N_TEST)
 
-    width = np.full(N_TEST, np.nan)
-    width[idxs_lhs] = (RNG.normal(18, 4, len(idxs_lhs))).astype(int)
-    width[idxs_rhs] = (RNG.normal(22, 4, len(idxs_rhs))).astype(int)
-    width = np.clip(width, WIDTH_LB, WIDTH_UB)
+    y = flip_binary(scale.copy(), 0.25)
 
-    y = min_max_scale(width ** 2)
-    y = RNG.binomial(1, y, len(y))
+    colors = RNG.random(N_TEST)[:, None, None]
 
-    brightness = RNG.random(N_TEST)
-
-    center_x = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
-    center_y = RNG.randint(WIDTH_UB // 2, IMAGE_SIZE - WIDTH_UB // 2 + 1, N_TRAINVAL)
+    center_x = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
+    center_y = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
 
     x = np.zeros((N_TEST, IMAGE_SIZE, IMAGE_SIZE))
     for idx in range(N_TEST):
-        half_width_floor = np.floor(width[idx] / 2)
-        half_width_ceil = np.ceil(width[idx] / 2)
+        width = WIDTH_SMALL if scale[idx] == 0 else WIDTH_LARGE
+        half_width_floor = np.floor(width / 2)
+        half_width_ceil = np.ceil(width / 2)
         x_lb = int(center_x[idx] - half_width_floor)
         x_ub = int(center_x[idx] + half_width_ceil)
         y_lb = int(center_y[idx] - half_width_floor)
         y_ub = int(center_y[idx] + half_width_ceil)
-        x[idx, x_lb:x_ub, y_lb:y_ub] = brightness[idx]
-    x = x.reshape(len(x), -1)
+        x[idx, x_lb:x_ub, y_lb:y_ub] = 1
 
+    x = np.stack([x, x], axis=1)
+    x[:, 0, :, :] *= colors
+    x[:, 1, :, :] *= (1 - colors)
     x = torch.tensor(x, dtype=torch.float32)
+    x = x.flatten(start_dim=1)
+
     y = torch.tensor(y, dtype=torch.long)
     e = torch.full_like(y, np.nan, dtype=torch.float32)
-    c = torch.tensor(width, dtype=torch.float32)
-    s = torch.tensor(brightness, dtype=torch.float32)
-    return make_dataloader((x, y, e, c, s), batch_size, False)
+    c = torch.tensor(scale, dtype=torch.float32)
+    s = torch.tensor(colors.squeeze(), dtype=torch.float32)
+    return x, y, e, c, s
 
 
-def make_data(train_ratio, batch_size):
+def subsample(x, y, e, c, s, n_examples):
+    idxs = RNG.choice(len(x), n_examples, replace=False)
+    return x[idxs], y[idxs], e[idxs], c[idxs], s[idxs]
+
+
+def make_data(train_ratio, batch_size, n_debug_examples):
     x, y, e, c, s = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
@@ -107,50 +123,55 @@ def make_data(train_ratio, batch_size):
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
     x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
+    x_test, y_test, e_test, c_test, s_test = make_test_data()
+    if n_debug_examples is not None:
+        x_train, y_train, e_train, c_train, s_train = subsample(x_train, y_train, e_train, c_train, s_train, n_debug_examples)
+        x_val, y_val, e_val, c_val, s_val = subsample(x_val, y_val, e_val, c_val, s_val, n_debug_examples)
+        x_test, y_test, e_test, c_test, s_test = subsample(x_test, y_test, e_test, c_test, s_test, n_debug_examples)
     data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
     data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
-    data_test = make_test_data(batch_size)
+    data_test = make_dataloader((x_test, y_test, e_test, c_test, s_test), batch_size, False)
     return data_train, data_val, data_test
 
 
 def main():
     x, y, e, c, s = make_trainval_data()
-    width = c
-    brightness = s
+    scale = c
+    colors = s
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
-    hist_discrete(axes[0], width[e == 0])
-    hist_discrete(axes[1], width[e == 1])
+    hist_discrete(axes[0], scale[e == 0])
+    hist_discrete(axes[1], scale[e == 1])
     axes[0].set_title('p(width|e=0)')
     axes[1].set_title('p(width|e=1)')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-    axes[0].hist(brightness[(y == 0) & (e == 0)], bins='auto')
-    axes[1].hist(brightness[(y == 0) & (e == 1)], bins='auto')
-    axes[2].hist(brightness[(y == 1) & (e == 0)], bins='auto')
-    axes[3].hist(brightness[(y == 1) & (e == 1)], bins='auto')
-    axes[0].set_title('p(brightness|y=0,e=0)')
-    axes[1].set_title('p(brightness|y=0,e=1)')
-    axes[2].set_title('p(brightness|y=1,e=0)')
-    axes[3].set_title('p(brightness|y=1,e=1)')
+    axes[0].hist(colors[(y == 0) & (e == 0)], bins='auto')
+    axes[1].hist(colors[(y == 0) & (e == 1)], bins='auto')
+    axes[2].hist(colors[(y == 1) & (e == 0)], bins='auto')
+    axes[3].hist(colors[(y == 1) & (e == 1)], bins='auto')
+    axes[0].set_title('p(color|y=0,e=0)')
+    axes[1].set_title('p(color|y=0,e=1)')
+    axes[2].set_title('p(color|y=1,e=0)')
+    axes[3].set_title('p(color|y=1,e=1)')
     fig.suptitle('Assumed Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-    hist_discrete(axes[0], width[(y == 0) & (e == 0)])
-    hist_discrete(axes[1], width[(y == 0) & (e == 1)])
-    hist_discrete(axes[2], width[(y == 1) & (e == 0)])
-    hist_discrete(axes[3], width[(y == 1) & (e == 1)])
-    axes[0].set_title('p(width|y=0,e=0)')
-    axes[1].set_title('p(width|y=0,e=1)')
-    axes[2].set_title('p(width|y=1,e=0)')
-    axes[3].set_title('p(width|y=1,e=1)')
+    axes[0].hist(scale[(y == 0) & (e == 0)])
+    axes[1].hist(scale[(y == 0) & (e == 1)])
+    axes[2].hist(scale[(y == 1) & (e == 0)])
+    axes[3].hist(scale[(y == 1) & (e == 1)])
+    axes[0].set_title('p(size|y=0,e=0)')
+    axes[1].set_title('p(size|y=0,e=1)')
+    axes[2].set_title('p(size|y=1,e=0)')
+    axes[3].set_title('p(size|y=1,e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
     fig, axes = plt.subplots(1, 2, figsize=(6, 3))
-    axes[0].hist(brightness[e == 0], bins='auto')
-    axes[1].hist(brightness[e == 1], bins='auto')
-    axes[0].set_title('p(brightness|e=0)')
-    axes[1].set_title('p(brightness|e=1)')
+    axes[0].hist(colors[e == 0], bins='auto')
+    axes[1].hist(colors[e == 1], bins='auto')
+    axes[0].set_title('p(color|e=0)')
+    axes[1].set_title('p(color|e=1)')
     fig.suptitle('Assumed Non-Gaussian')
     fig.tight_layout()
     plt.show(block=True)
