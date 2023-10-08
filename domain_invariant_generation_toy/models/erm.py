@@ -56,6 +56,28 @@ class ERM_X(ERMBase):
         return y_pred, y
 
 
+class ERM_C(ERMBase):
+    def __init__(self, h_sizes, lr, weight_decay):
+        super().__init__(lr, weight_decay)
+        self.save_hyperparameters()
+        self.mlp = MLP(1, h_sizes, 1)
+
+    def forward(self, x, y, e, c, s):
+        y_pred = self.mlp(c[:, None]).view(-1)
+        return y_pred, y
+
+
+class ERM_S(ERMBase):
+    def __init__(self, h_sizes, lr, weight_decay):
+        super().__init__(lr, weight_decay)
+        self.save_hyperparameters()
+        self.mlp = MLP(1, h_sizes, 1)
+
+    def forward(self, x, y, e, c, s):
+        y_pred = self.mlp(s[:, None]).view(-1)
+        return y_pred, y
+
+
 class ERM_ZC(ERMBase):
     def __init__(self, z_size, h_sizes, lr, weight_decay):
         super().__init__(lr, weight_decay)

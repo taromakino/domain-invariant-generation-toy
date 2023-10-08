@@ -45,6 +45,16 @@ def make_model(args):
             return erm.ERM_X(X_SIZE[args.dataset], args.h_sizes, args.lr, args.weight_decay)
         else:
             return erm.ERM_X.load_from_checkpoint(ckpt_fpath(args, args.task))
+    elif args.task == Task.ERM_C:
+        if args.is_train:
+            return erm.ERM_C(args.h_sizes, args.lr, args.weight_decay)
+        else:
+            return erm.ERM_C.load_from_checkpoint(ckpt_fpath(args, args.task))
+    elif args.task == Task.ERM_S:
+        if args.is_train:
+            return erm.ERM_S(args.h_sizes, args.lr, args.weight_decay)
+        else:
+            return erm.ERM_S.load_from_checkpoint(ckpt_fpath(args, args.task))
     elif args.task == Task.ERM_ZC:
         if args.is_train:
             return erm.ERM_ZC(args.z_size, args.h_sizes, args.lr, args.weight_decay)
@@ -72,6 +82,8 @@ def main(args):
     model = make_model(args)
     if args.task in [
         Task.ERM_X,
+        Task.ERM_C,
+        Task.ERM_S,
         Task.ERM_ZC,
         Task.ERM_ZS
     ]:
