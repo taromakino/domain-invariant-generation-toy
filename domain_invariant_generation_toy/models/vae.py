@@ -101,7 +101,7 @@ class VAE(pl.LightningModule):
         self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.z_sample = []
-        self.x, self.y, self.z = [], [], []
+        self.x, self.y, self.e, self.z = [], [], [], []
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -214,6 +214,7 @@ class VAE(pl.LightningModule):
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.x.append(x.cpu())
                 self.y.append(y.cpu())
+                self.e.append(e.cpu())
                 self.z.append(z.detach().cpu())
 
     def on_test_epoch_end(self):
@@ -225,8 +226,9 @@ class VAE(pl.LightningModule):
             assert self.task == Task.INFER_Z
             x = torch.cat(self.x)
             y = torch.cat(self.y)
+            e = torch.cat(self.e)
             z = torch.cat(self.z)
-            torch.save((x, y, z), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}',
+            torch.save((x, y, e, z), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}',
                 'infer.pt'))
 
     def configure_optimizers(self):

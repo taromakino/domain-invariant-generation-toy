@@ -61,7 +61,7 @@ def make_trainval_data():
     return x, y, e, c, s
 
 
-def make_test_data(batch_size):
+def make_test_data():
     mnist = datasets.MNIST(os.environ['DATA_DPATH'], train=False, download=True)
     binary_idxs = np.where(mnist.targets <= 1)
     images, digits = mnist.data[binary_idxs], mnist.targets[binary_idxs]
@@ -97,7 +97,7 @@ def make_data(train_ratio, batch_size, n_debug_examples):
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
     x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
-    x_test, y_test, e_test, c_test, s_test = make_test_data(batch_size)
+    x_test, y_test, e_test, c_test, s_test = make_test_data()
     if n_debug_examples is not None:
         x_train, y_train, e_train, c_train, s_train = subsample(x_train, y_train, e_train, c_train, s_train, n_debug_examples)
         x_val, y_val, e_val, c_val, s_val = subsample(x_val, y_val, e_val, c_val, s_val, n_debug_examples)
