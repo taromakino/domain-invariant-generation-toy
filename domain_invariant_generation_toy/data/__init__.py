@@ -21,7 +21,7 @@ PLOT = {
 
 IMAGE_SHAPE = {
     'cmnist': (2, 28, 28),
-    'dsprites': (data.dsprites.IMAGE_SIZE, data.dsprites.IMAGE_SIZE)
+    'dsprites': (2, data.dsprites.IMAGE_SIZE, data.dsprites.IMAGE_SIZE)
 }
 
 X_SIZE = {
