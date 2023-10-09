@@ -13,7 +13,7 @@ from utils.nn_utils import make_dataloader
 
 def sample_prior(rng, model, y, e):
     idx = rng.choice(len(y), 1)
-    prior_dist = model.prior(model.y_embed(y[idx]), model.e_embed(e[idx]))
+    prior_dist = model.prior(y, e)
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
 
