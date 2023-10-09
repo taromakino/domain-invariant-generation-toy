@@ -75,12 +75,13 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, lr, weight_decay, alpha, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, alpha, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
         self.beta = beta
+        self.reg_mult = reg_mult
         self.lr = lr
         self.weight_decay = weight_decay
         self.alpha = alpha
@@ -122,23 +123,25 @@ class VAE(pl.LightningModule):
         # KL(q(z_c,z_s|x) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        return log_prob_x_z, log_prob_y_zc, self.beta * kl
+        prior_norm = (prior_dist.loc ** 2).mean()
+        return log_prob_x_z, log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl = self.loss(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + kl
+        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
+        loss = -log_prob_x_z - log_prob_y_zc + kl + prior_norm
         return loss
 
     def validation_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl = self.loss(x, y, e)
-        loss = -log_prob_x_z - log_prob_y_zc + kl
+        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
+        loss = -log_prob_x_z - log_prob_y_zc + kl + prior_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_kl', kl, on_step=False, on_epoch=True)
+        self.log('val_prior_norm', prior_norm, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def infer_loss(self, x, z):
