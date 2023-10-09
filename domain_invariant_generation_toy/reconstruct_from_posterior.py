@@ -12,7 +12,7 @@ from utils.file import load_file
 
 def sample_prior(rng, model, y, e):
     idx = rng.choice(len(y), 1)
-    prior_dist = model.prior(y, e)
+    prior_dist = model.prior(y[idx], e[idx])
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
 
