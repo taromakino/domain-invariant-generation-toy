@@ -10,6 +10,9 @@ from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
+PRIOR_INIT_SD = 0.01
+
+
 class Encoder(nn.Module):
     def __init__(self, x_size, z_size, rank, h_sizes):
         super().__init__()
@@ -50,16 +53,16 @@ class Prior(nn.Module):
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
         self.low_rank_causal = nn.Parameter(torch.zeros(N_ENVS, z_size, rank))
         self.diag_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        nn.init.kaiming_normal_(self.mu_causal)
-        nn.init.kaiming_normal_(self.low_rank_causal)
-        nn.init.kaiming_normal_(self.diag_causal)
+        nn.init.normal_(self.mu_causal, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.low_rank_causal, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.diag_causal, 0, PRIOR_INIT_SD)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
         self.low_rank_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size, rank))
         self.diag_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        nn.init.kaiming_normal_(self.mu_spurious)
-        nn.init.kaiming_normal_(self.low_rank_spurious)
-        nn.init.kaiming_normal_(self.diag_spurious)
+        nn.init.normal_(self.mu_spurious, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.low_rank_spurious, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.diag_spurious, 0, PRIOR_INIT_SD)
 
     def forward(self, y, e):
         batch_size = len(y)
