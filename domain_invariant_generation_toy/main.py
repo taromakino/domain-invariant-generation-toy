@@ -24,7 +24,7 @@ def make_data(args):
         data_test = make_dataloader(torch.load(os.path.join(args.dpath, Task.INFER_Z.value, EvalStage.TEST.value,
             f'version_{args.seed}', 'infer.pt')), args.batch_size, False)
     else:
-        data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_debug_examples)
+        data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     if args.eval_stage == EvalStage.TRAIN:
         data_eval = data_train
     elif args.eval_stage == EvalStage.VAL:
@@ -136,7 +136,6 @@ if __name__ == '__main__':
     parser.add_argument('--is_train', action='store_true')
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--n_debug_examples', type=int)
     parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])

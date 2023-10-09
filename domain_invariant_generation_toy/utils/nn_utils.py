@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
 
-COV_OFFSET = 1e-3
+COV_OFFSET = 1e-6
 
 
 class MLP(nn.Module):

@@ -22,8 +22,7 @@ def main(args):
     task_dpath = os.path.join(args.dpath, Task.VAE.value)
     existing_args = load_file(os.path.join(task_dpath, f'version_{args.seed}', 'args.pkl'))
     pl.seed_everything(existing_args.seed)
-    dataloader, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size,
-        existing_args.n_debug_examples)
+    dataloader, _, _ = MAKE_DATA[existing_args.dataset](existing_args.train_ratio, existing_args.batch_size)
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, c, s = dataloader.dataset[:]
     x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
