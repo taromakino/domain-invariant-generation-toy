@@ -157,6 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval_stage', type=EvalStage, choices=list(EvalStage))
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--infer_batch_size', type=int, default=1024)
     parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])
