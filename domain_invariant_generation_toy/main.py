@@ -133,15 +133,15 @@ def run_task(args, task, eval_stage):
         
 def main(args):
     if args.task == Task.ALL:
-        # run_task(args, Task.VAE, None)
-        # run_task(args, Task.Q_Z, None)
-        # run_task(args, Task.INFER_Z, EvalStage.TRAIN)
-        # run_task(args, Task.INFER_Z, EvalStage.VAL)
-        # run_task(args, Task.INFER_Z, EvalStage.TEST)
-        # run_task(args, Task.ERM_ZC, None)
-        # run_task(args, Task.ERM_ZC, EvalStage.VAL)
-        # run_task(args, Task.ERM_ZC, EvalStage.TEST)
-        # reconstruct_from_posterior.main(args)
+        run_task(args, Task.VAE, None)
+        run_task(args, Task.Q_Z, None)
+        run_task(args, Task.INFER_Z, EvalStage.TRAIN)
+        run_task(args, Task.INFER_Z, EvalStage.VAL)
+        run_task(args, Task.INFER_Z, EvalStage.TEST)
+        run_task(args, Task.ERM_ZC, None)
+        run_task(args, Task.ERM_ZC, EvalStage.VAL)
+        run_task(args, Task.ERM_ZC, EvalStage.TEST)
+        reconstruct_from_posterior.main(args)
         reconstruct_from_infer.main(args)
     else:
         run_task(args, args.task, args.eval_stage)
