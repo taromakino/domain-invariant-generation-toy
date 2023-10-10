@@ -15,7 +15,7 @@ N_COLS = 10
 
 def sample_prior(rng, model, y, e):
     idx = rng.choice(len(y), 1)
-    prior_dist = model.prior(y[idx], e[idx])
+    prior_dist = model.prior(y[idx].to(model.device), e[idx].to(model.device))
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
 
@@ -29,7 +29,8 @@ def main(args):
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, z = dataloader.dataset[:]
     for example_idx in range(N_EXAMPLES):
-        x_seed, y_seed, e_seed, z_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]], z[[example_idx]]
+        x_seed, y_seed, e_seed, z_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]], z[[example_idx]].to(
+            model.device)
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, N_COLS, figsize=(2 * N_COLS, 2 * 2))
         for ax in axes.flatten():

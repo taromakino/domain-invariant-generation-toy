@@ -66,11 +66,14 @@ class Prior(nn.Module):
 
     def forward(self, y, e):
         batch_size = len(y)
+        # Causal
         mu_causal = self.mu_causal[e]
-        mu_spurious = self.mu_spurious[y, e]
-        mu = torch.hstack((mu_causal, mu_spurious))
         cov_causal = arr_to_cov(self.low_rank_causal[e], self.diag_causal[e])
+        # Spurious
+        mu_spurious = self.mu_spurious[y, e]
         cov_spurious = arr_to_cov(self.low_rank_spurious[y, e], self.diag_spurious[y, e])
+        # Block diagonal
+        mu = torch.hstack((mu_causal, mu_spurious))
         cov = torch.zeros(batch_size, 2 * self.z_size, 2 * self.z_size, device=y.device)
         cov[:, :self.z_size, :self.z_size] = cov_causal
         cov[:, self.z_size:, self.z_size:] = cov_spurious
@@ -101,7 +104,7 @@ class VAE(pl.LightningModule):
         # q(z)
         self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
-        self.z_sample = []
+        self.q_z_samples = []
         self.x, self.y, self.e, self.z = [], [], [], []
 
     def sample_z(self, dist):
@@ -150,23 +153,22 @@ class VAE(pl.LightningModule):
     def infer_loss(self, x, z):
         batch_size = len(x)
         # log p(x|z_c,z_s)
-        log_prob_x_z = self.decoder(x, z).mean()
+        log_prob_x_z = self.decoder(x, z)
         # log p(y|z_c)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
-        optim_loss = torch.inf
+        losses = []
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
             for e_elem in range(N_ENVS):
                 e = torch.full((batch_size,), e_elem, dtype=torch.long, device=self.device)
-                log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float())
+                log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
                 # log p(z|y,e)
                 prior_dist = self.prior(y, e)
-                log_prob_z_ye = prior_dist.log_prob(z).mean()
-                loss = -log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye
-                if loss < optim_loss:
-                    optim_loss = loss
-        return optim_loss
+                log_prob_z_ye = prior_dist.log_prob(z)
+                losses.append((-log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye)[:, None])
+        losses = torch.hstack(losses)
+        return losses.max(dim=1).values.mean()
 
     def infer_z(self, x):
         batch_size = len(x)
@@ -188,7 +190,7 @@ class VAE(pl.LightningModule):
         x, y, e, c, s = batch
         if self.task == Task.Q_Z:
             z = self.encoder(x, y, e).loc
-            self.z_sample.append(z.detach().cpu())
+            self.q_z_samples.append(z.detach().cpu())
         else:
             assert self.task == Task.INFER_Z
             with torch.set_grad_enabled(True):
@@ -201,7 +203,7 @@ class VAE(pl.LightningModule):
 
     def on_test_epoch_end(self):
         if self.task == Task.Q_Z:
-            z = torch.cat(self.z_sample)
+            z = torch.cat(self.q_z_samples)
             self.q_z_mu.data = torch.mean(z, 0)
             self.q_z_var.data = torch.var(z, 0)
         else:
