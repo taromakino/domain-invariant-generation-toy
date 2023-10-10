@@ -3,7 +3,7 @@ import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
-from data import MAKE_DATA, PLOT, IMAGE_SHAPE
+from data import N_CLASSES, N_ENVS, MAKE_DATA, PLOT, IMAGE_SHAPE
 from models.vae import VAE
 from utils.enums import Task
 
@@ -12,9 +12,10 @@ N_EXAMPLES = 10
 N_COLS = 10
 
 
-def sample_prior(rng, model, y, e):
-    idx = rng.choice(len(y), 1)
-    prior_dist = model.prior(y[idx], e[idx])
+def sample_prior(rng, model):
+    y = torch.tensor(rng.choice(N_CLASSES), dtype=torch.long, device=model.device)[None]
+    e = torch.tensor(rng.choice(N_ENVS), dtype=torch.long, device=model.device)[None]
+    prior_dist = model.prior(y, e)
     z_sample = prior_dist.sample()
     return torch.chunk(z_sample, 2, dim=1)
 
@@ -26,9 +27,9 @@ def main(args):
     dataloader, _, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, c, s = dataloader.dataset[:]
-    x, y, e = x.to(model.device), y.to(model.device), e.to(model.device)
     for example_idx in range(N_EXAMPLES):
         x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
+        x_seed, y_seed, e_seed = x_seed.to(model.device), y_seed.to(model.device), e_seed.to(model.device)
         posterior_dist_seed = model.encoder(x_seed, y_seed, e_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
@@ -44,7 +45,7 @@ def main(args):
         plot(axes[0, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         plot(axes[1, 1], x_pred.reshape(image_size).detach().cpu().numpy())
         for col_idx in range(2, N_COLS):
-            zc_sample, zs_sample = sample_prior(rng, model, y, e)
+            zc_sample, zs_sample = sample_prior(rng, model)
             x_pred_causal = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_sample, zs_seed))))
             x_pred_spurious = torch.sigmoid(model.decoder.mlp(torch.hstack((zc_seed, zs_sample))))
             plot(axes[0, col_idx], x_pred_causal.reshape(image_size).detach().cpu().numpy())

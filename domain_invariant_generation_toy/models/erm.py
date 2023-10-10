@@ -1,5 +1,4 @@
 import pytorch_lightning as pl
-import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 from torchmetrics import Accuracy
@@ -75,28 +74,4 @@ class ERM_S(ERMBase):
 
     def forward(self, x, y, e, c, s):
         y_pred = self.mlp(s[:, None]).view(-1)
-        return y_pred, y
-
-
-class ERM_ZC(ERMBase):
-    def __init__(self, z_size, h_sizes, lr, weight_decay):
-        super().__init__(lr, weight_decay)
-        self.save_hyperparameters()
-        self.mlp = MLP(z_size, h_sizes, 1)
-
-    def forward(self, x, y, e, z):
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.mlp(z_c).view(-1)
-        return y_pred, y
-
-
-class ERM_ZS(ERMBase):
-    def __init__(self, z_size, h_sizes, lr, weight_decay):
-        super().__init__(lr, weight_decay)
-        self.save_hyperparameters()
-        self.mlp = MLP(z_size, h_sizes, 1)
-
-    def forward(self, x, y, e, z):
-        z_c, z_s = torch.chunk(z, 2, dim=1)
-        y_pred = self.mlp(z_s).view(-1)
         return y_pred, y

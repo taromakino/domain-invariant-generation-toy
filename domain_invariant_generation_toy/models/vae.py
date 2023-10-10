@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
+from torchmetrics import Accuracy
 from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
@@ -106,6 +107,7 @@ class VAE(pl.LightningModule):
         self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
         self.q_z_samples = []
         self.x, self.y, self.e, self.z = [], [], [], []
+        self.eval_metric = Accuracy('binary')
 
     def sample_z(self, dist):
         mu, scale_tril = dist.loc, dist.scale_tril
@@ -192,10 +194,13 @@ class VAE(pl.LightningModule):
             z = self.encoder(x, y, e).loc
             self.q_z_samples.append(z.detach().cpu())
         else:
-            assert self.task == Task.INFER_Z
+            assert self.task == Task.CLASSIFY
             with torch.set_grad_enabled(True):
                 loss, z = self.infer_z(x)
+                z_c, z_s = torch.chunk(z, 2, dim=1)
+                y_pred = self.classifier(z_c).view(-1)
                 self.log('loss', loss, on_step=False, on_epoch=True)
+                self.eval_metric.update(y_pred, y)
                 self.x.append(x.cpu())
                 self.y.append(y.cpu())
                 self.e.append(e.cpu())
@@ -207,7 +212,8 @@ class VAE(pl.LightningModule):
             self.q_z_mu.data = torch.mean(z, 0)
             self.q_z_var.data = torch.var(z, 0)
         else:
-            assert self.task == Task.INFER_Z
+            assert self.task == Task.CLASSIFY
+            self.log('eval_metric', self.eval_metric.compute())
             x = torch.cat(self.x)
             y = torch.cat(self.y)
             e = torch.cat(self.e)
