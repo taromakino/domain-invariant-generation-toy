@@ -160,6 +160,7 @@ class VAE(pl.LightningModule):
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         losses = []
+        y_values = []
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
             for e_elem in range(N_ENVS):
@@ -169,24 +170,31 @@ class VAE(pl.LightningModule):
                 prior_dist = self.prior(y, e)
                 log_prob_z_ye = prior_dist.log_prob(z)
                 losses.append((-log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye)[:, None])
-        losses = torch.hstack(losses)
-        return losses.max(dim=1).values.mean()
+                y_values.append(y_elem)
+        losses = torch.hstack(losses).max(dim=1)
+        idxs = losses.indices
+        y_values = torch.tensor(y_values)
+        y_pred = y_values[idxs]
+        return losses.values.mean(), y_pred
+
 
     def infer_z(self, x):
         batch_size = len(x)
         z_param = nn.Parameter(torch.repeat_interleave(self.q_z().loc[None], batch_size, dim=0))
         optim = Adam([z_param], lr=self.lr_infer)
         optim_loss = torch.inf
+        optim_y_pred = None
         optim_z = None
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
-            loss = self.infer_loss(x, z_param)
+            loss, y_pred = self.infer_loss(x, z_param)
             loss.backward()
             optim.step()
             if loss < optim_loss:
                 optim_loss = loss
+                optim_y_pred = y_pred
                 optim_z = z_param.clone()
-        return optim_loss, optim_z
+        return optim_loss, optim_y_pred, optim_z
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
@@ -196,9 +204,7 @@ class VAE(pl.LightningModule):
         else:
             assert self.task == Task.CLASSIFY
             with torch.set_grad_enabled(True):
-                loss, z = self.infer_z(x)
-                z_c, z_s = torch.chunk(z, 2, dim=1)
-                y_pred = self.classifier(z_c).view(-1)
+                loss, y_pred, z = self.infer_z(x)
                 self.log('loss', loss, on_step=False, on_epoch=True)
                 self.eval_metric.update(y_pred, y)
                 self.x.append(x.cpu())
