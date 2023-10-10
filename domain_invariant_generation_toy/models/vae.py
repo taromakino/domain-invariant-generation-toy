@@ -171,9 +171,9 @@ class VAE(pl.LightningModule):
                 log_prob_z_ye = prior_dist.log_prob(z)
                 losses.append((-log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye)[:, None])
                 y_values.append(y_elem)
-        losses = torch.hstack(losses).max(dim=1)
+        losses = torch.hstack(losses).min(dim=1)
         idxs = losses.indices
-        y_values = torch.tensor(y_values)
+        y_values = torch.tensor(y_values, device=self.device)
         y_pred = y_values[idxs]
         return losses.values.mean(), y_pred
 

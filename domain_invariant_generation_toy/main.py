@@ -105,8 +105,8 @@ def run_task(args, task, eval_stage):
             max_epochs=1,
             inference_mode=False)
         trainer.test(model, data_eval)
-        
-        
+
+
 def main(args):
     if args.task == Task.ALL:
         run_task(args, Task.VAE, None)
