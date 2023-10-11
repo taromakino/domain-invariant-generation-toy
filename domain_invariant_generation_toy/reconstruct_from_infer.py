@@ -25,7 +25,7 @@ def main(args):
     rng = np.random.RandomState(args.seed)
     task_dpath = os.path.join(args.dpath, Task.VAE.value)
     pl.seed_everything(args.seed)
-    dataloader = make_dataloader(torch.load(os.path.join(args.dpath, Task.CLASSIFY.value, EvalStage.TRAIN.value,
+    dataloader = make_dataloader(torch.load(os.path.join(args.dpath, Task.CLASSIFY.value, EvalStage.TEST.value,
         f'version_{args.seed}', 'infer.pt')), 1, False)
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, z = dataloader.dataset[:]
@@ -52,5 +52,5 @@ def main(args):
             plot(axes[1, col_idx], x_pred_spurious.reshape(image_size).detach().cpu().numpy())
         fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'reconstruct_from_infer')
         os.makedirs(fig_dpath, exist_ok=True)
-        plt.savefig(os.path.join(fig_dpath, f'{example_idx}.png'))
+        plt.savefig(os.path.join(fig_dpath, f'{example_idx}.pdf'))
         plt.close()

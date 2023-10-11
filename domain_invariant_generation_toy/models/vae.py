@@ -163,9 +163,9 @@ class VAE(pl.LightningModule):
         y_values = []
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
+            log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
             for e_elem in range(N_ENVS):
                 e = torch.full((batch_size,), e_elem, dtype=torch.long, device=self.device)
-                log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
                 # log p(z|y,e)
                 prior_dist = self.prior(y, e)
                 log_prob_z_ye = prior_dist.log_prob(z)
