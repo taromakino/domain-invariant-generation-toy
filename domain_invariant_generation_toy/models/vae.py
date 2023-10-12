@@ -1,4 +1,3 @@
-import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
@@ -21,7 +20,7 @@ class Encoder(nn.Module):
         self.z_size = z_size
         self.rank = rank
         self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.low_rank = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size * 2 * rank)
+        self.low_rank = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size * rank)
         self.diag = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
 
     def forward(self, x, y, e):
@@ -30,7 +29,7 @@ class Encoder(nn.Module):
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y, e, :]
         low_rank = self.low_rank(x)
-        low_rank = low_rank.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size, 2 * self.rank)
+        low_rank = low_rank.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size, self.rank)
         low_rank = low_rank[torch.arange(batch_size), y, e, :]
         diag = self.diag(x)
         diag = diag.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
@@ -83,12 +82,11 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, q_size, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
-        self.q_size = q_size
         self.beta = beta
         self.reg_mult = reg_mult
         self.lr = lr
@@ -104,9 +102,9 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         # q(z)
-        self.q_mu = nn.Parameter(torch.full((q_size, 2 * z_size), torch.nan), requires_grad=False)
-        self.q_cov = nn.Parameter(torch.full((q_size, 2 * z_size, 2 * z_size), torch.nan), requires_grad=False)
-        self.q_mu_samples, self.q_cov_samples = [], []
+        self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
+        self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
+        self.q_z_samples = []
         self.x, self.y, self.e, self.z = [], [], [], []
         self.eval_metric = Accuracy('binary')
 
@@ -115,6 +113,9 @@ class VAE(pl.LightningModule):
         batch_size, z_size = mu.shape
         epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
+
+    def q_z(self):
+        return D.MultivariateNormal(self.q_z_mu, covariance_matrix=torch.diag(self.q_z_var))
 
     def loss(self, x, y, e):
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
@@ -152,15 +153,13 @@ class VAE(pl.LightningModule):
 
     def infer_loss(self, x, z):
         batch_size = len(x)
-        q = D.MultivariateNormal(self.q_mu, scale_tril=self.q_cov)
         # log p(x|z_c,z_s)
         log_prob_x_z = self.decoder(x, z)
         # log p(y|z_c)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         # log q(z)
-        log_prob_z = q.log_prob(z[:, None, :])
-        log_prob_z = torch.logsumexp(log_prob_z, dim=1) - np.log(self.q_size)
+        log_prob_z = self.q_z().log_prob(z)
         loss_candidates = []
         y_candidates = []
         for y_elem in range(N_CLASSES):
@@ -176,7 +175,7 @@ class VAE(pl.LightningModule):
 
     def infer_z(self, x):
         batch_size = len(x)
-        z_param = nn.Parameter(torch.repeat_interleave(self.q_mu.mean(dim=0)[None], batch_size, dim=0))
+        z_param = nn.Parameter(torch.repeat_interleave(self.q_z().loc[None], batch_size, dim=0))
         optim = Adam([z_param], lr=self.lr_infer)
         optim_loss = torch.inf
         optim_y_pred = None
@@ -194,10 +193,9 @@ class VAE(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
-        if self.task == Task.Q:
-            posterior_dist = self.encoder(x, y, e)
-            self.q_mu_samples.append(posterior_dist.loc.detach().cpu())
-            self.q_cov_samples.append(posterior_dist.scale_tril.detach().cpu())
+        if self.task == Task.Q_Z:
+            z = self.encoder(x, y, e).loc
+            self.q_z_samples.append(z.detach().cpu())
         else:
             assert self.task == Task.CLASSIFY
             with torch.set_grad_enabled(True):
@@ -210,12 +208,10 @@ class VAE(pl.LightningModule):
                 self.z.append(z.detach().cpu())
 
     def on_test_epoch_end(self):
-        if self.task == Task.Q:
-            rng = np.random.RandomState(self.trainer.logger.version)
-            q_mu, q_cov = torch.cat(self.q_mu_samples), torch.cat(self.q_cov_samples)
-            idxs = rng.choice(len(q_mu), self.q_size, replace=False)
-            self.q_mu.data = q_mu[idxs].to(self.device)
-            self.q_cov.data = q_cov[idxs].to(self.device)
+        if self.task == Task.Q_Z:
+            z = torch.cat(self.q_z_samples)
+            self.q_z_mu.data = torch.mean(z, 0)
+            self.q_z_var.data = torch.var(z, 0)
         else:
             assert self.task == Task.CLASSIFY
             self.log('eval_metric', self.eval_metric.compute())
