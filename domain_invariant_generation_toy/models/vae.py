@@ -20,7 +20,7 @@ class Encoder(nn.Module):
         self.z_size = z_size
         self.rank = rank
         self.mu = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
-        self.low_rank = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size * rank)
+        self.low_rank = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size * 2 * rank)
         self.diag = MLP(x_size, h_sizes, N_CLASSES * N_ENVS * 2 * z_size)
 
     def forward(self, x, y, e):
@@ -29,7 +29,7 @@ class Encoder(nn.Module):
         mu = mu.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
         mu = mu[torch.arange(batch_size), y, e, :]
         low_rank = self.low_rank(x)
-        low_rank = low_rank.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size, self.rank)
+        low_rank = low_rank.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size, 2 * self.rank)
         low_rank = low_rank[torch.arange(batch_size), y, e, :]
         diag = self.diag(x)
         diag = diag.reshape(batch_size, N_CLASSES, N_ENVS, 2 * self.z_size)
