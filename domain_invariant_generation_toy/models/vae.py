@@ -83,8 +83,7 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, n_components, beta, reg_mult, lr, weight_decay, lr_infer,
-            n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
