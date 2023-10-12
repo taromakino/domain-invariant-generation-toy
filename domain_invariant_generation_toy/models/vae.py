@@ -5,6 +5,7 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
+from models.gmm import GaussianMixture
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
@@ -82,7 +83,8 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, n_components, beta, reg_mult, lr, weight_decay, lr_infer,
+            n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -102,8 +104,7 @@ class VAE(pl.LightningModule):
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         # q(z)
-        self.q_z_mu = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
-        self.q_z_var = nn.Parameter(torch.full((2 * z_size,), torch.nan), requires_grad=False)
+        self.q_z = GaussianMixture(n_components, 2 * z_size)
         self.q_z_samples = []
         self.x, self.y, self.e, self.z = [], [], [], []
         self.eval_metric = Accuracy('binary')
@@ -113,9 +114,6 @@ class VAE(pl.LightningModule):
         batch_size, z_size = mu.shape
         epsilon = torch.randn(batch_size, z_size, 1).to(self.device)
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
-
-    def q_z(self):
-        return D.MultivariateNormal(self.q_z_mu, covariance_matrix=torch.diag(self.q_z_var))
 
     def loss(self, x, y, e):
         # z_c,z_s ~ q(z_c,z_s|x,y,e)
@@ -159,7 +157,7 @@ class VAE(pl.LightningModule):
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         # log q(z)
-        log_prob_z = self.q_z().log_prob(z)
+        log_prob_z = self.q_z.score_samples(z)
         loss_candidates = []
         y_candidates = []
         for y_elem in range(N_CLASSES):
@@ -175,7 +173,8 @@ class VAE(pl.LightningModule):
 
     def infer_z(self, x):
         batch_size = len(x)
-        z_param = nn.Parameter(torch.repeat_interleave(self.q_z().loc[None], batch_size, dim=0))
+        z_sample = self.q_z.sample(batch_size)[0]
+        z_param = nn.Parameter(z_sample)
         optim = Adam([z_param], lr=self.lr_infer)
         optim_loss = torch.inf
         optim_y_pred = None
@@ -210,8 +209,7 @@ class VAE(pl.LightningModule):
     def on_test_epoch_end(self):
         if self.task == Task.Q_Z:
             z = torch.cat(self.q_z_samples)
-            self.q_z_mu.data = torch.mean(z, 0)
-            self.q_z_var.data = torch.var(z, 0)
+            self.q_z.fit(z)
         else:
             assert self.task == Task.CLASSIFY
             self.log('eval_metric', self.eval_metric.compute())
