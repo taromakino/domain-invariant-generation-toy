@@ -7,6 +7,7 @@ class Task(Enum):
     ERM_C = 'erm_c'
     ERM_S = 'erm_s'
     VAE = 'vae'
+    Q = 'q'
     CLASSIFY = 'classify'
 
 
