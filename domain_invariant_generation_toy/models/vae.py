@@ -1,3 +1,4 @@
+import math
 import os
 import pytorch_lightning as pl
 import torch
@@ -5,7 +6,6 @@ import torch.distributions as D
 import torch.nn as nn
 import torch.nn.functional as F
 from data import N_CLASSES, N_ENVS
-from models.gmm import GaussianMixture
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
@@ -103,9 +103,6 @@ class VAE(pl.LightningModule):
         self.prior = Prior(z_size, rank)
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
-        # q(z)
-        self.q_z = GaussianMixture(n_components, 2 * z_size)
-        self.q_z_samples = []
         self.x, self.y, self.e, self.z = [], [], [], []
         self.eval_metric = Accuracy('binary')
 
@@ -156,13 +153,17 @@ class VAE(pl.LightningModule):
         # log p(y|z_c)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
-        # log q(z)
-        log_prob_z = self.q_z.score_samples(z)
         loss_candidates = []
         y_candidates = []
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
+            log_prob_z = []
+            for e_elem in range(N_ENVS):
+                e = torch.full((batch_size,), e_elem, dtype=torch.long, device=self.device)
+                log_prob_z.append(self.encoder(x, y, e).log_prob(z))
+            log_prob_z = torch.stack(log_prob_z)
+            log_prob_z = torch.logsumexp(log_prob_z, dim=0) - math.log(N_ENVS)
             loss_candidates.append((-log_prob_x_z - log_prob_y_zc - log_prob_z)[:, None])
             y_candidates.append(y_elem)
         loss_candidates = torch.hstack(loss_candidates).min(dim=1)
@@ -171,10 +172,19 @@ class VAE(pl.LightningModule):
         y_pred = y_candidates[idxs]
         return loss_candidates.values.mean(), y_pred
 
-    def infer_z(self, x):
+    def make_z_param(self, x):
         batch_size = len(x)
-        z_sample = self.q_z.sample(batch_size)[0]
-        z_param = nn.Parameter(z_sample)
+        z = 0
+        for y_elem in range(N_CLASSES):
+            y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
+            for e_elem in range(N_ENVS):
+                e = torch.full((batch_size,), e_elem, dtype=torch.long, device=self.device)
+                z += self.encoder(x, y, e).loc
+        z /= (N_CLASSES * N_ENVS)
+        return nn.Parameter(z)
+
+    def infer_z(self, x):
+        z_param = self.make_z_param(x)
         optim = Adam([z_param], lr=self.lr_infer)
         optim_loss = torch.inf
         optim_y_pred = None
@@ -192,33 +202,24 @@ class VAE(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y, e, c, s = batch
-        if self.task == Task.Q_Z:
-            z = self.encoder(x, y, e).loc
-            self.q_z_samples.append(z.detach().cpu())
-        else:
-            assert self.task == Task.CLASSIFY
-            with torch.set_grad_enabled(True):
-                loss, y_pred, z = self.infer_z(x)
-                self.log('loss', loss, on_step=False, on_epoch=True)
-                self.eval_metric.update(y_pred, y)
-                self.x.append(x.cpu())
-                self.y.append(y.cpu())
-                self.e.append(e.cpu())
-                self.z.append(z.detach().cpu())
+        assert self.task == Task.CLASSIFY
+        with torch.set_grad_enabled(True):
+            loss, y_pred, z = self.infer_z(x)
+            self.log('loss', loss, on_step=False, on_epoch=True)
+            self.eval_metric.update(y_pred, y)
+            self.x.append(x.cpu())
+            self.y.append(y.cpu())
+            self.e.append(e.cpu())
+            self.z.append(z.detach().cpu())
 
     def on_test_epoch_end(self):
-        if self.task == Task.Q_Z:
-            z = torch.cat(self.q_z_samples)
-            self.q_z.fit(z)
-        else:
-            assert self.task == Task.CLASSIFY
-            self.log('eval_metric', self.eval_metric.compute())
-            x = torch.cat(self.x)
-            y = torch.cat(self.y)
-            e = torch.cat(self.e)
-            z = torch.cat(self.z)
-            torch.save((x, y, e, z), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}',
-                'infer.pt'))
+        assert self.task == Task.CLASSIFY
+        self.log('eval_metric', self.eval_metric.compute())
+        x = torch.cat(self.x)
+        y = torch.cat(self.y)
+        e = torch.cat(self.e)
+        z = torch.cat(self.z)
+        torch.save((x, y, e, z), os.path.join(self.trainer.log_dir, f'version_{self.trainer.logger.version}', 'infer.pt'))
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)

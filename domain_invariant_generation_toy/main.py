@@ -55,11 +55,9 @@ def make_model(args, task, is_train):
     elif task == Task.VAE:
         return vae.VAE(task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_sizes, args.n_components, args.beta,
             args.reg_mult, args.lr, args.weight_decay, args.lr_infer, args.n_infer_steps)
-    elif task == Task.Q_Z:
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=task)
     else:
         assert task == Task.CLASSIFY
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.Q_Z), task=task, lr_infer=args.lr_infer,
+        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=task, lr_infer=args.lr_infer,
             n_infer_steps=args.n_infer_steps)
 
 
@@ -94,14 +92,6 @@ def run_task(args, task, eval_stage):
             max_epochs=args.n_epochs)
         trainer.fit(model, data_train, data_val_iid)
         save_file(args, os.path.join(args.dpath, task.value, f'version_{args.seed}', 'args.pkl'))
-    elif task == Task.Q_Z:
-        trainer = pl.Trainer(
-            logger=CSVLogger(os.path.join(args.dpath, task.value), name='',
-                version=args.seed),
-            max_epochs=1)
-        trainer.test(model, data_train)
-        trainer.save_checkpoint(ckpt_fpath(args, task))
-        save_file(args, os.path.join(args.dpath, task.value, f'version_{args.seed}', 'args.pkl'))
     else:
         assert task == Task.CLASSIFY
         trainer = pl.Trainer(
@@ -115,7 +105,6 @@ def run_task(args, task, eval_stage):
 def main(args):
     if args.task == Task.ALL:
         run_task(args, Task.VAE, None)
-        run_task(args, Task.Q_Z, None)
         run_task(args, Task.CLASSIFY, EvalStage.TRAIN)
         run_task(args, Task.CLASSIFY, EvalStage.VAL)
         run_task(args, Task.CLASSIFY, EvalStage.TEST)
