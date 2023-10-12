@@ -13,8 +13,13 @@ from utils.file import save_file
 
 
 def make_data(args, task, eval_stage):
-    batch_size = args.infer_batch_size if task == Task.CLASSIFY else args.batch_size
-    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, batch_size)
+    if task == Task.CLASSIFY:
+        batch_size = args.infer_batch_size
+        n_debug_examples = args.n_debug_examples
+    else:
+        batch_size = args.batch_size
+        n_debug_examples = None
+    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, batch_size, n_debug_examples)
     if eval_stage is None:
         data_eval = None
     elif eval_stage == EvalStage.TRAIN:
@@ -130,6 +135,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--infer_batch_size', type=int, default=2048)
+    parser.add_argument('--n_debug_examples', type=int)
     parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[512, 512])

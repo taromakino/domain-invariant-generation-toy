@@ -89,7 +89,7 @@ def subsample(x, y, e, c, s, n_examples):
     return x[idxs], y[idxs], e[idxs], c[idxs], s[idxs]
 
 
-def make_data(train_ratio, batch_size):
+def make_data(train_ratio, batch_size, n_debug_examples):
     x, y, e, c, s = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
@@ -98,6 +98,10 @@ def make_data(train_ratio, batch_size):
     x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
     x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
     x_test, y_test, e_test, c_test, s_test = make_test_data()
+    if n_debug_examples is not None:
+        x_train, y_train, e_train, c_train, s_train = subsample(x_train, y_train, e_train, c_train, s_train, n_debug_examples)
+        x_val, y_val, e_val, c_val, s_val = subsample(x_val, y_val, e_val, c_val, s_val, n_debug_examples)
+        x_test, y_test, e_test, c_test, s_test = subsample(x_test, y_test, e_test, c_test, s_test, n_debug_examples)
     data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
     data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
     data_test = make_dataloader((x_test, y_test, e_test, c_test, s_test), batch_size, False)
