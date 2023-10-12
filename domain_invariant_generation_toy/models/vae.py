@@ -82,7 +82,7 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, alpha, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -91,7 +91,6 @@ class VAE(pl.LightningModule):
         self.reg_mult = reg_mult
         self.lr = lr
         self.weight_decay = weight_decay
-        self.alpha = alpha
         self.lr_infer = lr_infer
         self.n_infer_steps = n_infer_steps
         # q(z_c|x,y,e)
@@ -159,24 +158,20 @@ class VAE(pl.LightningModule):
         # log p(y|z_c)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
-        losses = []
-        y_values = []
+        # log q(z)
+        log_prob_z = self.q_z().log_prob(z)
+        loss_candidates = []
+        y_candidates = []
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
-            for e_elem in range(N_ENVS):
-                e = torch.full((batch_size,), e_elem, dtype=torch.long, device=self.device)
-                # log p(z|y,e)
-                prior_dist = self.prior(y, e)
-                log_prob_z_ye = prior_dist.log_prob(z)
-                losses.append((-log_prob_x_z - log_prob_y_zc - self.alpha * log_prob_z_ye)[:, None])
-                y_values.append(y_elem)
-        losses = torch.hstack(losses).min(dim=1)
-        idxs = losses.indices
-        y_values = torch.tensor(y_values, device=self.device)
-        y_pred = y_values[idxs]
-        return losses.values.mean(), y_pred
-
+            loss_candidates.append((-log_prob_x_z - log_prob_y_zc - log_prob_z)[:, None])
+            y_candidates.append(y_elem)
+        loss_candidates = torch.hstack(loss_candidates).min(dim=1)
+        y_candidates = torch.tensor(y_candidates, device=self.device)
+        idxs = loss_candidates.indices
+        y_pred = y_candidates[idxs]
+        return loss_candidates.values.mean(), y_pred
 
     def infer_z(self, x):
         batch_size = len(x)

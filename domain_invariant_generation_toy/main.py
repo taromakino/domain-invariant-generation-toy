@@ -49,13 +49,13 @@ def make_model(args, task, is_train):
             return erm.ERM_S.load_from_checkpoint(ckpt_fpath(args, task))
     elif task == Task.VAE:
         return vae.VAE(task, X_SIZE[args.dataset], args.z_size, args.rank, args.h_sizes, args.beta, args.reg_mult,
-            args.lr, args.weight_decay, args.alpha, args.lr_infer, args.n_infer_steps)
+            args.lr, args.weight_decay, args.lr_infer, args.n_infer_steps)
     elif task == Task.Q_Z:
         return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.VAE), task=task)
     else:
         assert task == Task.CLASSIFY
-        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.Q_Z), task=task, alpha=args.alpha,
-            lr_infer=args.lr_infer, n_infer_steps=args.n_infer_steps)
+        return vae.VAE.load_from_checkpoint(ckpt_fpath(args, Task.Q_Z), task=task, lr_infer=args.lr_infer,
+            n_infer_steps=args.n_infer_steps)
 
 
 def run_task(args, task, eval_stage):
@@ -137,9 +137,8 @@ if __name__ == '__main__':
     parser.add_argument('--reg_mult', type=float, default=1e-3)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
-    parser.add_argument('--alpha', type=float, default=1)
-    parser.add_argument('--lr_infer', type=float, default=0.1)
-    parser.add_argument('--n_infer_steps', type=int, default=1000)
+    parser.add_argument('--lr_infer', type=float, default=1)
+    parser.add_argument('--n_infer_steps', type=int, default=200)
     parser.add_argument('--n_epochs', type=int, default=200)
     parser.add_argument("--early_stop_ratio", type=float, default=0.1)
     main(parser.parse_args())
