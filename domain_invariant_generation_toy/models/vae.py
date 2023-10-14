@@ -11,7 +11,7 @@ from utils.enums import Task
 from utils.nn_utils import MLP, arr_to_tril, arr_to_cov
 
 
-PRIOR_INIT_SD = 0.01
+PRIOR_INIT_SD = 0.1
 
 
 class Encoder(nn.Module):
