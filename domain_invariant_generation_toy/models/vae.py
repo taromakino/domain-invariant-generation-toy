@@ -82,13 +82,11 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, beta, reg_mult, lr, weight_decay, lr_infer,
-            n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
-        self.y_mult = y_mult
         self.beta = beta
         self.reg_mult = reg_mult
         self.lr = lr
@@ -133,7 +131,7 @@ class VAE(pl.LightningModule):
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         prior_norm = (prior_dist.loc ** 2).mean()
-        return log_prob_x_z, self.y_mult * log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
+        return log_prob_x_z, log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
@@ -167,7 +165,7 @@ class VAE(pl.LightningModule):
         for y_elem in range(N_CLASSES):
             y = torch.full((batch_size,), y_elem, dtype=torch.long, device=self.device)
             log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
-            loss_candidates.append((-log_prob_x_z - self.y_mult * log_prob_y_zc - log_prob_z)[:, None])
+            loss_candidates.append((-log_prob_x_z - log_prob_y_zc - log_prob_z)[:, None])
             y_candidates.append(y_elem)
         loss_candidates = torch.hstack(loss_candidates).min(dim=1)
         y_candidates = torch.tensor(y_candidates, device=self.device)
