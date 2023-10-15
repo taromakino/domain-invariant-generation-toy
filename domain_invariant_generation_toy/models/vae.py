@@ -103,12 +103,12 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, beta, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
+    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, reg_mult, lr, weight_decay, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
         self.z_size = z_size
-        self.beta = beta
+        self.y_mult = y_mult
         self.reg_mult = reg_mult
         self.lr = lr
         self.weight_decay = weight_decay
@@ -152,7 +152,7 @@ class VAE(pl.LightningModule):
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
         prior_norm = (prior_dist.loc ** 2).mean()
-        return log_prob_x_z, log_prob_y_zc, self.beta * kl, self.reg_mult * prior_norm
+        return log_prob_x_z, self.y_mult * log_prob_y_zc, kl, self.reg_mult * prior_norm
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
