@@ -113,11 +113,11 @@ def run_task(args, task, eval_stage):
 
 def main(args):
     if args.task == Task.ALL:
-        # run_task(args, Task.VAE, None)
-        # run_task(args, Task.Q_Z, None)
+        run_task(args, Task.VAE, None)
+        run_task(args, Task.Q_Z, None)
         run_task(args, Task.CLASSIFY, EvalStage.TRAIN)
-        # run_task(args, Task.CLASSIFY, EvalStage.VAL)
-        # run_task(args, Task.CLASSIFY, EvalStage.TEST)
+        run_task(args, Task.CLASSIFY, EvalStage.VAL)
+        run_task(args, Task.CLASSIFY, EvalStage.TEST)
         reconstruct_from_posterior.main(args)
     else:
         run_task(args, args.task, args.eval_stage)
