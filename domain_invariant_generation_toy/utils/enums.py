@@ -12,5 +12,6 @@ class Task(Enum):
 
 class EvalStage(Enum):
     TRAIN = 'train'
-    VAL = 'val'
+    VAL_ID = 'val_id'
+    VAL_OOD = 'val_ood'
     TEST = 'test'

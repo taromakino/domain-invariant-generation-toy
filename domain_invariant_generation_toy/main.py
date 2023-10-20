@@ -12,23 +12,20 @@ from utils.file import save_file
 
 
 def make_data(args, task, eval_stage):
-    if task == Task.CLASSIFY:
-        batch_size = args.infer_batch_size
-        n_debug_examples = args.n_debug_examples
-    else:
-        batch_size = args.batch_size
-        n_debug_examples = None
-    data_train, data_val, data_test = MAKE_DATA[args.dataset](args.train_ratio, batch_size, n_debug_examples)
+    batch_size = args.infer_batch_size if task == Task.CLASSIFY else args.batch_size
+    data_train, data_val_id, data_val_ood, data_test = MAKE_DATA[args.dataset](args.train_ratio, batch_size)
     if eval_stage is None:
         data_eval = None
     elif eval_stage == EvalStage.TRAIN:
         data_eval = data_train
-    elif eval_stage == EvalStage.VAL:
-        data_eval = data_val
+    elif eval_stage == EvalStage.VAL_ID:
+        data_eval = data_val_id
+    elif eval_stage == EvalStage.VAL_OOD:
+        data_eval = data_val_ood
     else:
         assert eval_stage == EvalStage.TEST
         data_eval = data_test
-    return data_train, data_val, data_eval
+    return data_train, data_val_id, data_eval
 
 
 def ckpt_fpath(args, task):
@@ -62,7 +59,7 @@ def make_model(args, task, is_train):
 
 def run_task(args, task, eval_stage):
     pl.seed_everything(args.seed)
-    data_train, data_val_iid, data_eval = make_data(args, task, eval_stage)
+    data_train, data_val_id, data_eval = make_data(args, task, eval_stage)
     is_train = eval_stage is None
     model = make_model(args, task, is_train)
     if task in [
@@ -77,7 +74,7 @@ def run_task(args, task, eval_stage):
                     EarlyStopping(monitor='val_metric', mode='max', patience=int(args.early_stop_ratio * args.n_epochs)),
                     ModelCheckpoint(monitor='val_metric', mode='max', filename='best')],
                 max_epochs=args.n_epochs)
-            trainer.fit(model, data_train, data_val_iid)
+            trainer.fit(model, data_train, data_val_id)
         else:
             trainer = pl.Trainer(logger=CSVLogger(os.path.join(args.dpath, task.value, eval_stage.value),
                 name='', version=args.seed), max_epochs=1)
@@ -89,7 +86,7 @@ def run_task(args, task, eval_stage):
                 EarlyStopping(monitor='val_loss', patience=int(args.early_stop_ratio * args.n_epochs)),
                 ModelCheckpoint(monitor='val_loss', filename='best')],
             max_epochs=args.n_epochs)
-        trainer.fit(model, data_train, data_val_iid)
+        trainer.fit(model, data_train, data_val_id)
         save_file(args, os.path.join(args.dpath, task.value, f'version_{args.seed}', 'args.pkl'))
     else:
         assert task == Task.CLASSIFY
@@ -104,7 +101,8 @@ def run_task(args, task, eval_stage):
 def main(args):
     if args.task == Task.ALL:
         run_task(args, Task.VAE, None)
-        run_task(args, Task.CLASSIFY, EvalStage.VAL)
+        run_task(args, Task.CLASSIFY, EvalStage.VAL_ID)
+        run_task(args, Task.CLASSIFY, EvalStage.VAL_OOD)
         run_task(args, Task.CLASSIFY, EvalStage.TEST)
         reconstruct_from_posterior.main(args)
     else:
@@ -121,7 +119,6 @@ if __name__ == '__main__':
     parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--infer_batch_size', type=int, default=2048)
-    parser.add_argument('--n_debug_examples', type=int)
     parser.add_argument('--z_size', type=int, default=100)
     parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--h_sizes', nargs='+', type=int, default=[256, 256])
