@@ -77,7 +77,7 @@ def make_ood_data(is_test):
     y = flip_binary(digits.clone(), 0.25)
 
     mu = 0.9 if is_test else 0.1
-    colors = RNG.normal(mu, SPURIOUS_SD, n_total)[:, None, None]
+    colors = RNG.normal(mu, SPURIOUS_SD, len(x))[:, None, None]
 
     x = torch.stack([x, x], dim=1)
     x = x / 255
