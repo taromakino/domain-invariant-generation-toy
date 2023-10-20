@@ -7,10 +7,11 @@ from utils.plot import hist_discrete
 
 RNG = np.random.RandomState(0)
 PROB_ZERO_E0 = 0.25
+SPURIOUS_SD = 0.05
 N_TRAINVAL = 10000
-N_TEST = 2000
+N_OOD = 2000
 WIDTH_SMALL = 4
-WIDTH_LARGE = 12
+WIDTH_LARGE = 8
 IMAGE_SIZE = 28
 X_SIZE = 2 * IMAGE_SIZE ** 2
 
@@ -43,10 +44,10 @@ def make_trainval_data():
     idxs_y1_e0 = np.where((y == 1) & (e == 0))[0]
     idxs_y0_e1 = np.where((y == 0) & (e == 1))[0]
     idxs_y1_e1 = np.where((y == 1) & (e == 1))[0]
-    colors[idxs_y0_e0] = RNG.normal(0.2, 0.1, len(idxs_y0_e0))
-    colors[idxs_y1_e0] = RNG.normal(0.6, 0.1, len(idxs_y1_e0))
-    colors[idxs_y0_e1] = RNG.normal(0.8, 0.1, len(idxs_y0_e1))
-    colors[idxs_y1_e1] = RNG.normal(0.4, 0.1, len(idxs_y1_e1))
+    colors[idxs_y0_e0] = RNG.normal(0.2, SPURIOUS_SD, len(idxs_y0_e0))
+    colors[idxs_y1_e0] = RNG.normal(0.4, SPURIOUS_SD, len(idxs_y1_e0))
+    colors[idxs_y0_e1] = RNG.normal(0.8, SPURIOUS_SD, len(idxs_y0_e1))
+    colors[idxs_y1_e1] = RNG.normal(0.6, SPURIOUS_SD, len(idxs_y1_e1))
     colors = np.clip(colors, 0, 1)[:, None, None]
 
     center_x = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
@@ -76,18 +77,19 @@ def make_trainval_data():
     return x, y, e, c, s
 
 
-def make_test_data():
-    scale = RNG.randint(0, 2, N_TEST)
+def make_ood_data(is_test):
+    scale = RNG.randint(0, 2, N_OOD)
 
     y = flip_binary(scale.copy(), 0.25)
 
-    colors = RNG.random(N_TEST)[:, None, None]
+    mu = 0.9 if is_test else 0.1
+    colors = RNG.normal(mu, SPURIOUS_SD, N_OOD)[:, None, None]
 
     center_x = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
     center_y = RNG.randint(WIDTH_LARGE // 2, IMAGE_SIZE - WIDTH_LARGE // 2 + 1, N_TRAINVAL)
 
-    x = np.zeros((N_TEST, IMAGE_SIZE, IMAGE_SIZE))
-    for idx in range(N_TEST):
+    x = np.zeros((N_OOD, IMAGE_SIZE, IMAGE_SIZE))
+    for idx in range(N_OOD):
         width = WIDTH_SMALL if scale[idx] == 0 else WIDTH_LARGE
         half_width_floor = np.floor(width / 2)
         half_width_ceil = np.ceil(width / 2)
@@ -110,28 +112,21 @@ def make_test_data():
     return x, y, e, c, s
 
 
-def subsample(x, y, e, c, s, n_examples):
-    idxs = RNG.choice(len(x), n_examples, replace=False)
-    return x[idxs], y[idxs], e[idxs], c[idxs], s[idxs]
-
-
-def make_data(train_ratio, batch_size, n_debug_examples):
+def make_data(train_ratio, batch_size):
     x, y, e, c, s = make_trainval_data()
     n_total = len(e)
     n_train = int(train_ratio * n_total)
     train_idxs = RNG.choice(np.arange(n_total), n_train, replace=False)
     val_idxs = np.setdiff1d(np.arange(n_total), train_idxs)
     x_train, y_train, e_train, c_train, s_train = x[train_idxs], y[train_idxs], e[train_idxs], c[train_idxs], s[train_idxs]
-    x_val, y_val, e_val, c_val, s_val = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
-    x_test, y_test, e_test, c_test, s_test = make_test_data()
-    if n_debug_examples is not None:
-        x_train, y_train, e_train, c_train, s_train = subsample(x_train, y_train, e_train, c_train, s_train, n_debug_examples)
-        x_val, y_val, e_val, c_val, s_val = subsample(x_val, y_val, e_val, c_val, s_val, n_debug_examples)
-        x_test, y_test, e_test, c_test, s_test = subsample(x_test, y_test, e_test, c_test, s_test, n_debug_examples)
+    x_val_id, y_val_id, e_val_id, c_val_id, s_val_id = x[val_idxs], y[val_idxs], e[val_idxs], c[val_idxs], s[val_idxs]
+    x_val_ood, y_val_ood, e_val_ood, c_val_ood, s_val_ood = make_ood_data(False)
+    x_test, y_test, e_test, c_test, s_test = make_ood_data(True)
     data_train = make_dataloader((x_train, y_train, e_train, c_train, s_train), batch_size, True)
-    data_val = make_dataloader((x_val, y_val, e_val, c_val, s_val), batch_size, False)
+    data_val_id = make_dataloader((x_val_id, y_val_id, e_val_id, c_val_id, s_val_id), batch_size, False)
+    data_val_ood = make_dataloader((x_val_ood, y_val_ood, e_val_ood, c_val_ood, s_val_ood), batch_size, False)
     data_test = make_dataloader((x_test, y_test, e_test, c_test, s_test), batch_size, False)
-    return data_train, data_val, data_test
+    return data_train, data_val_id, data_val_ood, data_test
 
 
 def main():

@@ -24,7 +24,7 @@ def main(args):
     rng = np.random.RandomState(args.seed)
     task_dpath = os.path.join(args.dpath, Task.VAE.value)
     pl.seed_everything(args.seed)
-    dataloader, _, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size, args.n_debug_examples)
+    dataloader, _, _ = MAKE_DATA[args.dataset](args.train_ratio, args.batch_size)
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, c, s = dataloader.dataset[:]
     for example_idx in range(N_EXAMPLES):
