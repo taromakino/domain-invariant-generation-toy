@@ -82,7 +82,7 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, beta, reg_mult, kl_lb, lr, weight_decay, alpha,
+    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, beta, reg_mult, lr, weight_decay, alpha,
             lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
@@ -91,7 +91,6 @@ class VAE(pl.LightningModule):
         self.y_mult = y_mult
         self.beta = beta
         self.reg_mult = reg_mult
-        self.kl_lb = kl_lb
         self.lr = lr
         self.weight_decay = weight_decay
         self.alpha = alpha
@@ -133,7 +132,6 @@ class VAE(pl.LightningModule):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
-        kl = torch.max(kl, torch.full_like(kl, self.kl_lb))
         loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_norm
         return loss
 
@@ -141,7 +139,6 @@ class VAE(pl.LightningModule):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
         log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
-        kl = torch.max(kl, torch.full_like(kl, self.kl_lb))
         loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_norm
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
