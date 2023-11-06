@@ -1,3 +1,4 @@
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.distributions as D
@@ -7,63 +8,101 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
-from utils.nn_utils import MLP, arr_to_cov, arr_to_tril
+from utils.nn_utils import MLP, one_hot, arr_to_cov, arr_to_tril
 
 
-PRIOR_INIT_SD = 0.01
+IMAGE_EMBED_SHAPE = (32, 3, 3)
+IMAGE_EMBED_SIZE = np.prod(IMAGE_EMBED_SHAPE)
+
+
+class CNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.module_list = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1)
+        )
+
+    def forward(self, x):
+        return self.module_list(x)
+
+
+class DCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.module_list = nn.Sequential(
+            nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1, output_padding=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 2, kernel_size=4, stride=2, padding=1)
+        )
+
+    def forward(self, x):
+        return self.module_list(x)
 
 
 class Encoder(nn.Module):
-    def __init__(self, x_size, z_size, rank, h_sizes):
+    def __init__(self, z_size, rank, h_sizes):
         super().__init__()
         self.z_size = z_size
         self.rank = rank
-        self.mu = MLP(x_size, h_sizes, N_ENVS * 2 * z_size)
-        self.low_rank = MLP(x_size, h_sizes, N_ENVS * 2 * z_size * 2 * rank)
-        self.diag = MLP(x_size, h_sizes, N_ENVS * 2 * z_size)
+        self.cnn = CNN()
+        self.mu = MLP(IMAGE_EMBED_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
+        self.low_rank = MLP(IMAGE_EMBED_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size * 2 * rank)
+        self.diag = MLP(IMAGE_EMBED_SIZE + N_CLASSES + N_ENVS, h_sizes, 2 * z_size)
 
     def forward(self, x, y, e):
         batch_size = len(x)
-        # Causal
-        mu = self.mu(x)
-        mu = mu.reshape(batch_size, N_ENVS, 2 * self.z_size)
-        mu = mu[torch.arange(batch_size), e, :]
-        low_rank = self.low_rank(x)
-        low_rank = low_rank.reshape(batch_size, N_ENVS, 2 * self.z_size, 2 * self.rank)
-        low_rank = low_rank[torch.arange(batch_size), e, :]
-        diag = self.diag(x)
-        diag = diag.reshape(batch_size, N_ENVS, 2 * self.z_size)
-        diag = diag[torch.arange(batch_size), e, :]
+        x = self.cnn(x).view(batch_size, -1)
+        y_one_hot = one_hot(y, N_CLASSES)
+        e_one_hot = one_hot(e, N_ENVS)
+        mu = self.mu(x, y_one_hot, e_one_hot)
+        low_rank = self.low_rank(x, y_one_hot, e_one_hot)
+        low_rank = low_rank.reshape(batch_size, 2 * self.z_size, 2 * self.rank)
+        diag = self.diag(x, y_one_hot, e_one_hot)
         return D.MultivariateNormal(mu, scale_tril=arr_to_tril(low_rank, diag))
 
 
 class Decoder(nn.Module):
-    def __init__(self, x_size, z_size, h_sizes):
+    def __init__(self, z_size, h_sizes):
         super().__init__()
-        self.mlp = MLP(2 * z_size, h_sizes, x_size)
+        self.mlp = MLP(2 * z_size, h_sizes, IMAGE_EMBED_SIZE)
+        self.dcnn = nn.Sequential(
+            nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1, output_padding=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 32, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 2, kernel_size=4, stride=2, padding=1)
+        )
 
     def forward(self, x, z):
-        x_pred = self.mlp(z)
-        return -F.binary_cross_entropy_with_logits(x_pred, x, reduction='none').sum(dim=1)
+        batch_size = len(x)
+        x_pred = self.mlp(z).reshape(batch_size, *IMAGE_EMBED_SHAPE)
+        x_pred = self.dcnn(x_pred).view(batch_size, -1)
+        return -F.binary_cross_entropy_with_logits(x_pred, x.view(batch_size, -1), reduction='none').sum(dim=1)
 
 
 class Prior(nn.Module):
-    def __init__(self, z_size, rank):
+    def __init__(self, z_size, rank, prior_init_sd):
         super().__init__()
         self.z_size = z_size
         self.mu_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
         self.low_rank_causal = nn.Parameter(torch.zeros(N_ENVS, z_size, rank))
         self.diag_causal = nn.Parameter(torch.zeros(N_ENVS, z_size))
-        nn.init.normal_(self.mu_causal, 0, PRIOR_INIT_SD)
-        nn.init.normal_(self.low_rank_causal, 0, PRIOR_INIT_SD)
-        nn.init.normal_(self.diag_causal, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.mu_causal, 0, prior_init_sd)
+        nn.init.normal_(self.low_rank_causal, 0, prior_init_sd)
+        nn.init.normal_(self.diag_causal, 0, prior_init_sd)
         # p(z_s|y,e)
         self.mu_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
         self.low_rank_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size, rank))
         self.diag_spurious = nn.Parameter(torch.zeros(N_CLASSES, N_ENVS, z_size))
-        nn.init.normal_(self.mu_spurious, 0, PRIOR_INIT_SD)
-        nn.init.normal_(self.low_rank_spurious, 0, PRIOR_INIT_SD)
-        nn.init.normal_(self.diag_spurious, 0, PRIOR_INIT_SD)
+        nn.init.normal_(self.mu_spurious, 0, prior_init_sd)
+        nn.init.normal_(self.low_rank_spurious, 0, prior_init_sd)
+        nn.init.normal_(self.diag_spurious, 0, prior_init_sd)
 
     def forward(self, y, e):
         batch_size = len(y)
@@ -82,8 +121,8 @@ class Prior(nn.Module):
 
 
 class VAE(pl.LightningModule):
-    def __init__(self, task, x_size, z_size, rank, h_sizes, y_mult, beta, reg_mult, lr, weight_decay, alpha,
-            lr_infer, n_infer_steps):
+    def __init__(self, task, z_size, rank, h_sizes, prior_init_sd, y_mult, beta, reg_mult, lr, weight_decay,
+            alpha, lr_infer, n_infer_steps):
         super().__init__()
         self.save_hyperparameters()
         self.task = task
@@ -97,11 +136,11 @@ class VAE(pl.LightningModule):
         self.lr_infer = lr_infer
         self.n_infer_steps = n_infer_steps
         # q(z_c|x,y,e)
-        self.encoder = Encoder(x_size, z_size, rank, h_sizes)
+        self.encoder = Encoder(z_size, rank, h_sizes)
         # p(x|z_c,z_s)
-        self.decoder = Decoder(x_size, z_size, h_sizes)
+        self.decoder = Decoder(z_size, h_sizes)
         # p(z_c,z_s|y,e)
-        self.prior = Prior(z_size, rank)
+        self.prior = Prior(z_size, rank, prior_init_sd)
         # p(y|z_c)
         self.classifier = MLP(z_size, h_sizes, 1)
         self.eval_metric = Accuracy('binary')
