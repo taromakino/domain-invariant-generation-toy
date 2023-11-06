@@ -12,7 +12,6 @@ N_TEST = 2000
 WIDTH_SMALL = 4
 WIDTH_LARGE = 12
 IMAGE_SIZE = 28
-X_SIZE = 2 * IMAGE_SIZE ** 2
 
 
 def flip_binary(x, flip_prob):

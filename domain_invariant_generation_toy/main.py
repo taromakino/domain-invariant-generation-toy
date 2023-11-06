@@ -4,7 +4,7 @@ import os
 import pytorch_lightning as pl
 import reconstruct_from_posterior
 from argparse import ArgumentParser
-from data import MAKE_DATA, X_SIZE
+from data import MAKE_DATA
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from utils.enums import Task, EvalStage
@@ -33,7 +33,7 @@ def ckpt_fpath(args, task):
 def make_model(args, task, is_train):
     if task == Task.ERM_X:
         if is_train:
-            return erm.ERM_X(X_SIZE[args.dataset], args.h_sizes, args.lr, args.weight_decay)
+            return erm.ERM_X(args.h_sizes, args.lr, args.weight_decay)
         else:
             return erm.ERM_X.load_from_checkpoint(ckpt_fpath(args, task))
     elif task == Task.ERM_C:

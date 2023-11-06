@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import torch.nn.functional as F
+from models.vae import IMAGE_EMBED_SIZE, CNN
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.nn_utils import MLP
@@ -45,12 +46,15 @@ class ERMBase(pl.LightningModule):
 
 
 class ERM_X(ERMBase):
-    def __init__(self, x_size, h_sizes, lr, weight_decay):
+    def __init__(self, h_sizes, lr, weight_decay):
         super().__init__(lr, weight_decay)
         self.save_hyperparameters()
-        self.mlp = MLP(x_size, h_sizes, 1)
+        self.cnn = CNN()
+        self.mlp = MLP(IMAGE_EMBED_SIZE, h_sizes, 1)
 
     def forward(self, x, y, e, c, s):
+        batch_size = len(x)
+        x = self.cnn(x).view(batch_size, -1)
         y_pred = self.mlp(x).view(-1)
         return y_pred, y
 

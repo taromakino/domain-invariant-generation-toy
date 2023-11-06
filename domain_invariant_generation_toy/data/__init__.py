@@ -17,14 +17,3 @@ PLOT = {
     'cmnist': plot_red_green_image,
     'dsprites': plot_red_green_image
 }
-
-
-IMAGE_SHAPE = {
-    'cmnist': (2, 28, 28),
-    'dsprites': (2, data.dsprites.IMAGE_SIZE, data.dsprites.IMAGE_SIZE)
-}
-
-X_SIZE = {
-    'cmnist': data.cmnist.X_SIZE,
-    'dsprites': data.dsprites.X_SIZE
-}

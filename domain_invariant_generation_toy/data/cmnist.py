@@ -8,7 +8,6 @@ from utils.nn_utils import make_dataloader
 
 RNG = np.random.RandomState(0)
 PROB_ZERO_E0 = 0.25
-X_SIZE = 2 * 28 ** 2
 
 
 def flip_binary(x, flip_prob):
