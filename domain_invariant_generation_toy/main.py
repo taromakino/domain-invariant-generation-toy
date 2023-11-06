@@ -2,7 +2,7 @@ import models.erm as erm
 import models.vae as vae
 import os
 import pytorch_lightning as pl
-import reconstruct_from_posterior
+import plot_reconstruction
 from argparse import ArgumentParser
 from data import MAKE_DATA
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
@@ -101,7 +101,7 @@ def main(args):
         run_task(args, Task.VAE, None)
         run_task(args, Task.CLASSIFY, EvalStage.VAL)
         run_task(args, Task.CLASSIFY, EvalStage.TEST)
-        reconstruct_from_posterior.main(args)
+        plot_reconstruction.main(args)
     else:
         run_task(args, args.task, args.eval_stage)
 
@@ -129,5 +129,5 @@ if __name__ == '__main__':
     parser.add_argument('--lr_infer', type=float, default=1)
     parser.add_argument('--n_infer_steps', type=int, default=200)
     parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument("--early_stop_ratio", type=float, default=0.1)
+    parser.add_argument('--early_stop_ratio', type=float, default=0.1)
     main(parser.parse_args())

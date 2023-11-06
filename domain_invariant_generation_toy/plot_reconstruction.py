@@ -35,9 +35,8 @@ def main(args):
     model = VAE.load_from_checkpoint(os.path.join(task_dpath, f'version_{args.seed}', 'checkpoints', 'best.ckpt'))
     x, y, e, c, s = dataloader.dataset[:]
     for example_idx in range(N_EXAMPLES):
-        x_seed, y_seed, e_seed = x[[example_idx]], y[[example_idx]], e[[example_idx]]
-        x_seed, y_seed, e_seed = x_seed.to(model.device), y_seed.to(model.device), e_seed.to(model.device)
-        posterior_dist_seed = model.encoder(x_seed, y_seed, e_seed)
+        x_seed = x[[example_idx]].to(model.device)
+        posterior_dist_seed = model.encoder(x_seed)
         z_seed = posterior_dist_seed.loc
         zc_seed, zs_seed = torch.chunk(z_seed, 2, dim=1)
         fig, axes = plt.subplots(2, N_COLS, figsize=(2 * N_COLS, 2 * 2))
@@ -56,7 +55,7 @@ def main(args):
             x_pred_spurious = reconstruct_x(model, torch.hstack((zc_seed, zs_sample)))
             plot(axes[0, col_idx], x_pred_causal.squeeze().detach().cpu().numpy())
             plot(axes[1, col_idx], x_pred_spurious.squeeze().detach().cpu().numpy())
-        fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'reconstruct_from_posterior')
+        fig_dpath = os.path.join(task_dpath, f'version_{args.seed}', 'fig', 'plot_reconstruction')
         os.makedirs(fig_dpath, exist_ok=True)
         plt.savefig(os.path.join(fig_dpath, f'{example_idx}.png'))
         plt.close()
