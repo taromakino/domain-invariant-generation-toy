@@ -162,21 +162,27 @@ class VAE(pl.LightningModule):
         # KL(q(z_c,z_s|x) || p(z_c|e)p(z_s|y,e))
         prior_dist = self.prior(y, e)
         kl = D.kl_divergence(posterior_dist, prior_dist).mean()
-        prior_norm = (prior_dist.loc ** 2).mean()
-        return log_prob_x_z, log_prob_y_zc, kl, prior_norm
+        prior_reg = self.prior_reg(prior_dist)
+        return log_prob_x_z, log_prob_y_zc, kl, prior_reg
+    
+    def prior_reg(self, prior_dist):
+        mu = torch.zeros((1, 2 * self.z_size), device=self.device)
+        cov = torch.eye(2 * self.z_size, device=self.device).unsqueeze(0)
+        standard_normal = D.MultivariateNormal(mu, cov)
+        return D.kl_divergence(prior_dist, standard_normal).mean()
 
     def training_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
-        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_norm
+        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.loss(x, y, e)
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_reg
         return loss
 
     def validation_step(self, batch, batch_idx):
         assert self.task == Task.VAE
         x, y, e, c, s = batch
-        log_prob_x_z, log_prob_y_zc, kl, prior_norm = self.loss(x, y, e)
-        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_norm
+        log_prob_x_z, log_prob_y_zc, kl, prior_reg = self.loss(x, y, e)
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc + self.beta * kl + self.reg_mult * prior_reg
         self.log('val_log_prob_x_z', log_prob_x_z, on_step=False, on_epoch=True)
         self.log('val_log_prob_y_zc', log_prob_y_zc, on_step=False, on_epoch=True)
         self.log('val_kl', kl, on_step=False, on_epoch=True)
