@@ -8,7 +8,7 @@ from data import N_CLASSES, N_ENVS
 from torch.optim import Adam
 from torchmetrics import Accuracy
 from utils.enums import Task
-from utils.nn_utils import MLP, one_hot, arr_to_cov, arr_to_tril
+from utils.nn_utils import MLP, arr_to_cov, arr_to_tril
 
 
 IMAGE_EMBED_SHAPE = (32, 3, 3)
@@ -150,10 +150,10 @@ class VAE(pl.LightningModule):
         return mu + torch.bmm(scale_tril, epsilon).squeeze()
 
     def loss(self, x, y, e):
-        # z_c,z_s ~ q(z_c,z_s|x,y,e)
+        # z_c,z_s ~ q(z_c,z_s|x)
         posterior_dist = self.encoder(x)
         z = self.sample_z(posterior_dist)
-        # E_q(z_c,z_s|x,y,e)[log p(x|z_c,z_s)]
+        # E_q(z_c,z_s|x)[log p(x|z_c,z_s)]
         log_prob_x_z = self.decoder(x, z).mean()
         # E_q(z_c|x)[log p(y|z_c)]
         z_c, z_s = torch.chunk(z, 2, dim=1)
@@ -182,33 +182,26 @@ class VAE(pl.LightningModule):
         self.log('val_kl', kl, on_step=False, on_epoch=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
-    def infer_loss(self, x, y, e, z):
+    def infer_loss(self, x, y, z):
         # log p(x|z_c,z_s)
         log_prob_x_z = self.decoder(x, z)
         # log p(y|z_c)
         z_c, z_s = torch.chunk(z, 2, dim=1)
         y_pred = self.classifier(z_c).view(-1)
         log_prob_y_zc = -F.binary_cross_entropy_with_logits(y_pred, y.float(), reduction='none')
-        # log q(z_c,z_s|x,y,e)
-        log_prob_z_xye = self.encoder(x).log_prob(z)
-        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc - self.alpha * log_prob_z_xye
+        # log q(z_c,z_s|x)
+        log_prob_z_x = self.encoder(x).log_prob(z)
+        loss = -log_prob_x_z - self.y_mult * log_prob_y_zc - self.alpha * log_prob_z_x
         return loss
 
-    def make_z_param(self, x, y_value, e_value):
+    def opt_infer_loss(self, x, y_value):
         batch_size = len(x)
+        z_param = nn.Parameter(self.encoder(x).loc.detach())
         y = torch.full((batch_size,), y_value, dtype=torch.long, device=self.device)
-        e = torch.full((batch_size,), e_value, dtype=torch.long, device=self.device)
-        return nn.Parameter(self.encoder(x).loc.detach())
-
-    def opt_infer_loss(self, x, y_value, e_value):
-        batch_size = len(x)
-        z_param = self.make_z_param(x, y_value, e_value)
-        y = torch.full((batch_size,), y_value, dtype=torch.long, device=self.device)
-        e = torch.full((batch_size,), e_value, dtype=torch.long, device=self.device)
         optim = Adam([z_param], lr=self.lr_infer)
         for _ in range(self.n_infer_steps):
             optim.zero_grad()
-            loss = self.infer_loss(x, y, e, z_param)
+            loss = self.infer_loss(x, y, z_param)
             loss.mean().backward()
             optim.step()
         return loss.detach().clone()
@@ -217,9 +210,8 @@ class VAE(pl.LightningModule):
         loss_candidates = []
         y_candidates = []
         for y_value in range(N_CLASSES):
-            for e_value in range(N_ENVS):
-                loss_candidates.append(self.opt_infer_loss(x, y_value, e_value)[:, None])
-                y_candidates.append(y_value)
+            loss_candidates.append(self.opt_infer_loss(x, y_value)[:, None])
+            y_candidates.append(y_value)
         loss_candidates = torch.hstack(loss_candidates)
         y_candidates = torch.tensor(y_candidates, device=self.device)
         opt_loss = loss_candidates.min(dim=1)
