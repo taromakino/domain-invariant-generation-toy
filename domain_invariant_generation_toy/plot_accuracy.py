@@ -32,6 +32,7 @@ def main(args):
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     plot(ax, args, 'val', 0)
     plot(ax, args, 'test', 0.05)
+    ax.axhline(0.75, color=next_color(ax), linestyle='--', label='Oracle')
     ax.grid(alpha=0.5, linewidth=0.5)
     handles, labels = ax.get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=len(handles), bbox_to_anchor=[0.5, 0])
